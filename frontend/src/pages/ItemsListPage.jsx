@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import CulturalItemCard from '../components/CulturalItemCard';
 
+// In a real app, this would come from an API
 const itemsData = [
   {
     id: 1,
@@ -99,8 +100,54 @@ const popularTags = [
 ];
 
 const ItemsListPage = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [filteredItems, setFilteredItems] = useState(itemsData);
+
+  // Filter items based on search and filter criteria
+  useEffect(() => {
+    let filtered = [...itemsData];
+    
+    // Apply search term filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.title.toLowerCase().includes(term) || 
+        item.region.toLowerCase().includes(term) || 
+        item.description.toLowerCase().includes(term)
+      );
+    }
+    
+    // Apply region filter
+    if (selectedRegion) {
+      filtered = filtered.filter(item => item.region === selectedRegion);
+    }
+    
+    // Apply time period filter
+    if (selectedTimePeriod) {
+      filtered = filtered.filter(item => item.time_period === selectedTimePeriod);
+    }
+    
+    // Apply tag filter
+    if (selectedTag) {
+      filtered = filtered.filter(item => 
+        item.tags.some(tag => tag.name === selectedTag)
+      );
+    }
+    
+    setFilteredItems(filtered);
+  }, [searchTerm, selectedRegion, selectedTimePeriod, selectedTag]);
+
+  // Handle form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // Search logic is handled by the useEffect
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className=" max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Cultural Heritage Collection</h1>
         <p className="mt-2 text-lg text-gray-600">
@@ -112,12 +159,14 @@ const ItemsListPage = () => {
       <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
         <div className="p-6">
           {/* Search Bar */}
-          <form className="mb-6">
+          <form onSubmit={handleSubmit} className="mb-6">
             <div className="relative">
               <input
                 type="text"
                 placeholder="Search by name, region, materials..."
                 className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-3">
                 <button type="submit" className="text-gray-400 hover:text-gray-600">
@@ -139,6 +188,8 @@ const ItemsListPage = () => {
               <select
                 id="region"
                 className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
               >
                 <option value="">All Regions</option>
                 {regions.map((region) => (
@@ -157,6 +208,8 @@ const ItemsListPage = () => {
               <select
                 id="timePeriod"
                 className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                value={selectedTimePeriod}
+                onChange={(e) => setSelectedTimePeriod(e.target.value)}
               >
                 <option value="">All Time Periods</option>
                 {timePeriods.map((period) => (
@@ -175,6 +228,8 @@ const ItemsListPage = () => {
               <select
                 id="tag"
                 className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                value={selectedTag}
+                onChange={(e) => setSelectedTag(e.target.value)}
               >
                 <option value="">All Tags</option>
                 {popularTags.map((tag) => (
@@ -190,13 +245,33 @@ const ItemsListPage = () => {
       
       {/* Results Section */}
       <div>
-        <div className="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-x-8">
-          {itemsData.map((item) => (
-            <Link to={`/items/${item.id}`} key={item.id}>
-              <CulturalItemCard item={item} />
-            </Link>
-          ))}
-        </div>
+        {filteredItems.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-gray-500 text-lg">No items match your search criteria.</p>
+            <button 
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedRegion('');
+                setSelectedTimePeriod('');
+                setSelectedTag('');
+              }}
+            >
+              Clear Filters
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="mb-4 text-gray-600">{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'} found</p>
+            <div className="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-x-8">
+              {filteredItems.map((item) => (
+                <Link to={`/items/${item.id}`} key={item.id} className="group">
+                  <CulturalItemCard item={item} />
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

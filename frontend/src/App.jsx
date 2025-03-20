@@ -18,6 +18,7 @@ import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ContactPage from './pages/ContactPage';
 import NotFoundPage from './pages/NotFoundPage';
+import CommentPage from './pages/CommentPage';
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/comments" element={<CommentPage />} />
             <Route path="*" element={<NotFoundPage />} /> {/* 404 route */}
           </Routes>
         </main>
