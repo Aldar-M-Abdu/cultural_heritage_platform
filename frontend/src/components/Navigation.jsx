@@ -60,7 +60,7 @@ const Navigation = () => {
               </a>
               <a
                 href="/register"
-                className="bg-primary-600 text-white hover:bg-primary-700 px-3 py-2 rounded-md text-sm font-medium"
+                className="bg-primary-600 text-slate-950 hover:bg-primary-700 px-3 py-2 rounded-md text-sm font-medium"
               >
                 Sign up
               </a>

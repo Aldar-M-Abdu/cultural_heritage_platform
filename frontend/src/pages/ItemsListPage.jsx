@@ -187,7 +187,7 @@ const ItemsListPage = () => {
               </label>
               <select
                 id="region"
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                className="block w-full pl-3 pr-10 py-2 text-base border focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
               >
@@ -207,7 +207,7 @@ const ItemsListPage = () => {
               </label>
               <select
                 id="timePeriod"
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                className="block w-full pl-3 pr-10 py-2 text-base border focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
                 value={selectedTimePeriod}
                 onChange={(e) => setSelectedTimePeriod(e.target.value)}
               >
@@ -227,7 +227,7 @@ const ItemsListPage = () => {
               </label>
               <select
                 id="tag"
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                className="block w-full pl-3 pr-10 py-2 text-base border focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
                 value={selectedTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
               >

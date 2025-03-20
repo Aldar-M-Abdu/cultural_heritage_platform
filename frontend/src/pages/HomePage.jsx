@@ -21,10 +21,10 @@ const HomePage = () => {
             Discover, learn, and engage with cultural artifacts from around the world. Our platform connects you with cultural heritage that spans regions and time periods.
           </p>
           <div className="mt-10">
-            <a href="/explore" className="btn btn-primary mr-4">
+            <a href="/explore" className="text-white btn btn-primary mr-4">
               Start Exploring
             </a>
-            <a href="/about" className="btn btn-secondary">
+            <a href="/about" className="text-white btn btn-secondary">
               Learn More
             </a>
           </div>
