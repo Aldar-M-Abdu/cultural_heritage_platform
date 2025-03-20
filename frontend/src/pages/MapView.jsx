@@ -2,8 +2,7 @@ import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-// Correct import for MarkerClusterGroup
-import MarkerClusterGroup from "react-leaflet-cluster";
+import MarkerClusterGroup from "react-leaflet-cluster"; // Correct import
 
 // Set default icon for Leaflet markers
 const defaultIcon = new L.Icon({
