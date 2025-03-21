@@ -19,6 +19,8 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import ContactPage from './pages/ContactPage';
 import NotFoundPage from './pages/NotFoundPage';
 import CommentPage from './pages/CommentPage';
+import BlogPage from './pages/BlogPage';
+import AccessibilityPage from './pages/AccessibilityPage';
 
 function App() {
   return (
@@ -53,6 +55,8 @@ function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/comments" element={<CommentPage />} />
+            <Route path="/blog" element={<BlogPage />} />
+            <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="*" element={<NotFoundPage />} /> {/* 404 route */}
           </Routes>
         </main>
