@@ -1,6 +1,5 @@
 import React from 'react';
-
-const AuthContext = React.createContext(null);
+import useAuthStore from '../stores/authStore';
 
 export const AuthProvider = ({ children }) => {
   return (
@@ -11,5 +10,6 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => {
-  throw new Error('useAuth must be used within an AuthProvider');
+  const { user, isAuthenticated, login, logout } = useAuthStore();
+  return { user, isAuthenticated, login, logout };
 };
