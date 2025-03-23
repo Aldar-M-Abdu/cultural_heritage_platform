@@ -1,4 +1,4 @@
- import uuid
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Table, Integer, Boolean
 from sqlalchemy.dialects.postgresql import UUID
@@ -39,6 +39,8 @@ class CulturalItem(Base):
     # Relationships
     tags = relationship("Tag", secondary=cultural_item_tag, back_populates="cultural_items")
     media = relationship("Media", back_populates="cultural_item")
+    comments = relationship("Comment", back_populates="cultural_item")
+    events = relationship("Event", secondary="event_cultural_item", back_populates="cultural_items")
 
 
 class Tag(Base):
@@ -88,3 +90,83 @@ class Token(Base):
     expires_at = Column(DateTime)
     is_revoked = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    cultural_item_id = Column(UUID(as_uuid=True), ForeignKey('cultural_items.id'), nullable=True)
+    parent_comment_id = Column(UUID(as_uuid=True), ForeignKey('comments.id'), nullable=True)
+    
+    # Relationships
+    user = relationship("User")
+    cultural_item = relationship("CulturalItem", back_populates="comments")
+    replies = relationship("Comment", backref="parent_comment", remote_side=[id])
+
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    category_id = Column(UUID(as_uuid=True), ForeignKey('categories.id'), nullable=False)
+    author_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    category = relationship("Category", back_populates="blog_posts")
+    author = relationship("User")
+    
+
+class Category(Base):
+    __tablename__ = "categories"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False, unique=True)
+    
+    # Relationships
+    blog_posts = relationship("BlogPost", back_populates="category")
+
+
+class Contribution(Base):
+    __tablename__ = "contributions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    cultural_item_id = Column(UUID(as_uuid=True), ForeignKey('cultural_items.id'), nullable=False)
+    contribution_type = Column(String(50), nullable=False)  # e.g., "edit", "add", "delete"
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    cultural_item = relationship("CulturalItem")
+
+
+class Event(Base):
+    __tablename__ = "events"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)
+    location = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    cultural_items = relationship("CulturalItem", secondary="event_cultural_item", back_populates="events")
+
+
+# Association table for events and cultural items
+event_cultural_item = Table(
+    'event_cultural_item',
+    Base.metadata,
+    Column('event_id', UUID(as_uuid=True), ForeignKey('events.id')),
+    Column('cultural_item_id', UUID(as_uuid=True), ForeignKey('cultural_items.id'))
+)
