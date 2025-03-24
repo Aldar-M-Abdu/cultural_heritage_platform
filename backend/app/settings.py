@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     POSTGRES_PORT: str = "5432"
     DATABASE_URL: Optional[str] = None
     
-    @property
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL

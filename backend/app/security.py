@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer
+from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,11 @@ from app.settings import settings
 from app.db_setup import get_db
 from app.api.v1.core.models import User, Token
 from app.api.v1.core.schemas import TokenData
+from app.utils import create_access_token, decode_token  # Ensure utils is correctly imported
 
 # Password and authentication
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
+security = OAuth2PasswordBearer(tokenUrl="/api/auth/login")  # Updated to use OAuth2PasswordBearer
 
 
 def verify_password(plain_password, hashed_password):
@@ -51,9 +52,16 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(securit
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials"
     )
-    
+    try:
+        payload = decode_token(token)  # Updated to use correct function
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+
     db_token = db.query(Token).filter(
-        Token.token == token.credentials,
+        Token.token == token,
         Token.expires_at > datetime.utcnow(),
         Token.is_revoked == False
     ).first()

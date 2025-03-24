@@ -131,6 +131,9 @@ const MapView = () => {
                         key={item.id}
                         position={[item.latitude, item.longitude]}
                         title={item.name}
+                        eventHandlers={{
+                          click: () => setActiveItem(item),
+                        }}
                       >
                         <Popup className="custom-popup">
                           <div className="p-1">

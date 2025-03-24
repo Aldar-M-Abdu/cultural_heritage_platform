@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.db_setup import get_db
 from app.api.v1.core.models import User
-from app.security import get_current_active_user, get_admin_user
 from app.api.v1.core.schemas import (
     CulturalItem,
     CulturalItemCreate,
@@ -16,6 +15,7 @@ from app.api.v1.core.schemas import (
     Media
 )
 from app.api.v1.core import services
+from app.security import get_current_active_user, get_admin_user  # Ensure security is correctly imported
 
 router = APIRouter()
 

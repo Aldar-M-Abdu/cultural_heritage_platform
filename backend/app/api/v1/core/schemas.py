@@ -2,6 +2,8 @@ from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import List, Optional
+from uuid import UUID
 
 
 ### NEW SCHEMAS
@@ -226,19 +228,28 @@ class ArtifactCreateSchema(BaseModel):
 
 
 class CommentSchema(BaseModel):
-    id: int
+    id: UUID
     text: str
-    user_id: int
-    artifact_id: int
+    user_id: UUID
+    artifact_id: UUID
     created_at: datetime
-    replies: list["CommentSchema"] = []
+    replies: List["CommentSchema"] = []
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class CommentCreateSchema(BaseModel):
     text: str = Field(..., max_length=500)
-    artifact_id: int
+    artifact_id: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentCreate(BaseModel):
+    text: str = Field(..., max_length=500)
+    cultural_item_id: UUID  # Ensure this matches the database model
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationSchema(BaseModel):
@@ -254,3 +265,143 @@ class NotificationSchema(BaseModel):
 class NotificationCreateSchema(BaseModel):
     user_id: int
     message: str = Field(..., max_length=255)
+
+
+class TokenData(BaseModel):
+    username: str | None = None
+    # Add any additional fields if required
+
+
+class Tag(BaseModel):
+    id: UUID
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class Media(BaseModel):
+    id: UUID
+    url: str
+    media_type: str
+    title: Optional[str]
+    description: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class MediaCreate(BaseModel):
+    url: str
+    media_type: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    cultural_item_id: UUID
+
+    class Config:
+        from_attributes = True
+
+
+class CulturalItem(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str]
+    time_period: Optional[str]
+    region: Optional[str]
+    image_url: Optional[str]
+    video_url: Optional[str]
+    audio_url: Optional[str]
+    historical_significance: Optional[str]
+    tags: List[Tag] = []
+    media: List[Media] = []
+
+    class Config:
+        from_attributes = True
+
+
+class CulturalItemCreate(BaseModel):
+    title: str
+    description: Optional[str]
+    time_period: Optional[str]
+    region: Optional[str]
+    image_url: Optional[str]
+    video_url: Optional[str]
+    audio_url: Optional[str]
+    historical_significance: Optional[str]
+    tags: Optional[List[str]] = []
+
+
+class CulturalItemUpdate(BaseModel):
+    title: Optional[str]
+    description: Optional[str]
+    time_period: Optional[str]
+    region: Optional[str]
+    image_url: Optional[str]
+    video_url: Optional[str]
+    audio_url: Optional[str]
+    historical_significance: Optional[str]
+    tags: Optional[List[str]] = []
+
+
+class CulturalItemDetail(CulturalItem):
+    media: List[Media] = []
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class User(BaseModel):
+    id: str
+    email: EmailStr
+    username: str
+    is_active: bool
+    is_admin: bool
+
+    class Config:
+        from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ItemCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+
+class ItemUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+
+class Item(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

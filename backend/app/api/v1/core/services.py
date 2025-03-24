@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 
-from app.api.v1.core.models import CulturalItem, Tag, Media
+from app.api.v1.core.models import CulturalItem, Tag, Media, Comment
 from app.api.v1.core.schemas import CulturalItemCreate, CulturalItemUpdate, MediaCreate
 
 
@@ -125,3 +125,7 @@ def get_cultural_items_by_time_period(db: Session, time_period: str, skip: int =
     return db.query(CulturalItem).filter(
         CulturalItem.time_period == time_period
     ).offset(skip).limit(limit).all()
+
+
+def get_comments(db: Session, cultural_item_id: UUID):
+    return db.query(Comment).filter(Comment.cultural_item_id == cultural_item_id).all()

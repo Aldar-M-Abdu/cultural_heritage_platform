@@ -4,8 +4,9 @@ from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Table, Intege
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
 
-from app.db_setup import Base
+Base = declarative_base()  # Define Base here
 
 # Association table for tags and cultural items
 cultural_item_tag = Table(
@@ -77,8 +78,8 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    is_active = Column(Integer, default=1)
-    is_admin = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)  # Updated to Boolean
+    is_admin = Column(Boolean, default=False)  # Updated to Boolean
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -86,7 +87,7 @@ class Token(Base):
     __tablename__ = "tokens"
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String, unique=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # Ensure UUID type consistency
     expires_at = Column(DateTime)
     is_revoked = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
@@ -170,3 +171,13 @@ event_cultural_item = Table(
     Column('event_id', UUID(as_uuid=True), ForeignKey('events.id')),
     Column('cultural_item_id', UUID(as_uuid=True), ForeignKey('cultural_items.id'))
 )
+
+class Item(Base):
+    __tablename__ = "items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

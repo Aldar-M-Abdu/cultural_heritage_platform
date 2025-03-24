@@ -1,6 +1,5 @@
 import React from 'react';
 
-
 const CulturalItemCard = ({ item }) => {
   return (
     <div className="group relative overflow-hidden rounded-lg bg-white shadow-md hover:shadow-lg transition-all duration-300 h-full border border-gray-100">
@@ -46,7 +45,5 @@ const CulturalItemCard = ({ item }) => {
     </div>
   );
 };
-
-
 
 export default CulturalItemCard;
