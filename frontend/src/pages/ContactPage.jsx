@@ -1,136 +1,178 @@
 import React, { useState } from 'react';
 
 const ContactPage = () => {
-  const [formState, setFormState] = useState({
-    fullName: '',
+  const [formData, setFormData] = useState({
+    name: '',
     email: '',
+    subject: '',
     message: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
 
   const handleChange = (e) => {
-    setFormState({
-      ...formState,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prevData => ({
+      ...prevData,
+      [name]: value
+    }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Handle form submission logic here
-    console.log('Form submitted:', formState);
+    setIsSubmitting(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setSubmitStatus('success');
+      setFormData({
+        name: '',
+        email: '',
+        subject: '',
+        message: ''
+      });
+    }, 1500);
   };
 
   return (
-    <div className="bg-gradient-to-b from-white to-blue-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-700">
-              Contact Us
-            </span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Have questions or need assistance? We're here to help and would love to hear from you!
+    <div className="bg-gray-50 min-h-screen py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Contact Us</h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Have questions or feedback about our cultural heritage platform? 
+            We'd love to hear from you. Fill out the form below and we'll get back to you as soon as possible.
           </p>
         </div>
 
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-white rounded-lg shadow-xl overflow-hidden">
-            <div className="px-6 py-8 md:p-10">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label htmlFor="full-name" className="block text-sm font-medium text-gray-700">
-                    Full Name
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      type="text"
-                      name="fullName"
-                      id="full-name"
-                      value={formState.fullName}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md transition duration-150 ease-in-out"
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email Address
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={formState.email}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md transition duration-150 ease-in-out"
-                      placeholder="example@domain.com"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-gray-700">
-                    Message
-                  </label>
-                  <div className="mt-1">
-                    <textarea
-                      id="message"
-                      name="message"
-                      rows={6}
-                      value={formState.message}
-                      onChange={handleChange}
-                      className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md transition duration-150 ease-in-out"
-                      placeholder="How can we help you?"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <input
-                    id="privacy-policy"
-                    name="privacy-policy"
-                    type="checkbox"
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    required
-                  />
-                  <label htmlFor="privacy-policy" className="ml-2 block text-sm text-gray-600">
-                    I agree to the <a href="/privacy-policy" className="text-blue-600 hover:text-blue-800">Privacy Policy</a>
-                  </label>
-                </div>
-
-                <div>
-                  <button
-                    type="submit"
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out"
-                  >
-                    Send Message
-                  </button>
-                </div>
-              </form>
+        <div className="bg-white rounded-lg shadow-xl overflow-hidden max-w-3xl mx-auto">
+          <div className="md:flex">
+            <div className="bg-indigo-700 text-white p-8 md:w-1/3">
+              <h2 className="text-2xl font-bold mb-6">Get in Touch</h2>
+              
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-2">Email</h3>
+                <p className="text-indigo-200">info@culturalheritage.org</p>
+              </div>
+              
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold mb-2">Phone</h3>
+                <p className="text-indigo-200">+1 (555) 123-4567</p>
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Address</h3>
+                <p className="text-indigo-200">
+                  123 Heritage Lane<br />
+                  Cultural District<br />
+                  New York, NY 10001
+                </p>
+              </div>
             </div>
             
-            <div className="bg-gray-50 px-6 py-8 md:px-10 md:py-6">
-              <div className="flex flex-col md:flex-row md:space-x-6 text-center md:text-left">
-                <div className="flex-1 mb-4 md:mb-0">
-                  <h3 className="font-medium text-gray-900">Email</h3>
-                  <p className="mt-1 text-sm text-gray-600">support@example.com</p>
+            <div className="p-8 md:w-2/3">
+              {submitStatus === 'success' ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                    <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Message Sent!</h2>
+                  <p className="text-gray-600 mb-6">
+                    Thanks for reaching out. We'll get back to you as soon as possible.
+                  </p>
+                  <button 
+                    onClick={() => setSubmitStatus(null)}
+                    className="inline-block px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                  >
+                    Send Another Message
+                  </button>
                 </div>
-                <div className="flex-1 mb-4 md:mb-0">
-                  <h3 className="font-medium text-gray-900">Phone</h3>
-                  <p className="mt-1 text-sm text-gray-600">+1 (555) 123-4567</p>
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">Office</h3>
-                  <p className="mt-1 text-sm text-gray-600">123 Business Ave, Suite 100<br />San Francisco, CA 94107</p>
-                </div>
-              </div>
+              ) : (
+                <form onSubmit={handleSubmit}>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                        Your Name
+                      </label>
+                      <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        required
+                        className="block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                        className="block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        id="subject"
+                        name="subject"
+                        value={formData.subject}
+                        onChange={handleChange}
+                        required
+                        className="block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
+                        Message
+                      </label>
+                      <textarea
+                        id="message"
+                        name="message"
+                        rows="4"
+                        value={formData.message}
+                        onChange={handleChange}
+                        required
+                        className="block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+                      />
+                    </div>
+                    
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className={`inline-flex justify-center items-center w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Sending...
+                          </>
+                        ) : 'Send Message'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

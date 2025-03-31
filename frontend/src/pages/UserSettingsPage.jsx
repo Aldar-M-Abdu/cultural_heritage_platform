@@ -1,360 +1,523 @@
-import React, { useState } from 'react';
-import { BellIcon, LockClosedIcon, UserIcon, CogIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { UserIcon, BellIcon, LockClosedIcon, CogIcon } from '@heroicons/react/24/outline';
+import useAuthStore from '../stores/authStore';
 
 const UserSettingsPage = () => {
+  const [activeTab, setActiveTab] = useState('account');
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     currentPassword: '',
     newPassword: '',
+    confirmPassword: ''
   });
-
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
     smsNotifications: false,
-    pushNotifications: false,
-    weeklyDigest: true,
+    pushNotifications: true,
+    weeklyDigest: true
   });
+  const [notificationMessage, setNotificationMessage] = useState({ type: '', message: '' });
+  
+  const { user, updateProfile, changePassword } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState('account');
-
-  const handleInputChange = (e) => {
-    const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.username) newErrors.username = 'Username is required';
-    if (!formData.email) newErrors.email = 'Email is required';
-    if (formData.newPassword && !formData.currentPassword) 
-      newErrors.currentPassword = 'Current password is required to set a new password';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSettingsSubmit = (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      console.log('Updated settings:', formData);
-      
-      // Display success notification
-      const notification = document.getElementById('notification');
-      notification.classList.remove('translate-y-full');
-      setTimeout(() => {
-        notification.classList.add('translate-y-full');
-      }, 3000);
+  // Load user data on component mount
+  useEffect(() => {
+    if (user) {
+      setFormData(prevState => ({
+        ...prevState,
+        username: user.username || '',
+        email: user.email || ''
+      }));
     }
-  };
-
-  const toggleNotification = (type) => {
-    setNotificationSettings((prev) => ({
-      ...prev,
-      [type]: !prev[type],
+  }, [user]);
+  
+  // Handle form input changes
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prevState => ({
+      ...prevState,
+      [name]: value
     }));
   };
 
+  // Handle notification toggle changes
+  const handleNotificationChange = (e) => {
+    const { name, checked } = e.target;
+    setNotificationSettings(prevState => ({
+      ...prevState,
+      [name]: checked
+    }));
+  };
+
+  // Handle account form submission
+  const handleAccountSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setErrors({});
+    
+    try {
+      // Validate form data
+      let formErrors = {};
+      if (!formData.username.trim()) formErrors.username = 'Username is required';
+      if (!formData.email.trim()) formErrors.email = 'Email is required';
+      
+      if (Object.keys(formErrors).length > 0) {
+        setErrors(formErrors);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Call updateProfile from the auth store
+      await updateProfile({
+        username: formData.username,
+        email: formData.email
+      });
+      
+      // Show success message
+      setNotificationMessage({
+        type: 'success',
+        message: 'Account settings updated successfully!'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotificationMessage({ type: '', message: '' });
+      }, 3000);
+      
+    } catch (error) {
+      setNotificationMessage({
+        type: 'error',
+        message: error.message || 'Failed to update account settings'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle password form submission
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      // Validation
+      if (formData.newPassword !== formData.confirmPassword) {
+        setNotificationMessage({
+          type: 'error',
+          message: 'New password and confirmation do not match'
+        });
+        return;
+      }
+      
+      // This would be replaced with an actual API call
+      await changePassword({
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword
+      });
+      
+      // Reset form fields
+      setFormData(prevData => ({
+        ...prevData,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+      
+      // Show success message
+      setNotificationMessage({
+        type: 'success',
+        message: 'Password updated successfully!'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotificationMessage({ type: '', message: '' });
+      }, 3000);
+      
+    } catch (error) {
+      setNotificationMessage({
+        type: 'error',
+        message: error.message || 'Failed to update password'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle notifications form submission
+  const handleNotificationsSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      // Mock API call - would be replaced with actual service call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Show success message
+      setNotificationMessage({
+        type: 'success',
+        message: 'Notification preferences updated successfully!'
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => {
+        setNotificationMessage({ type: '', message: '' });
+      }, 3000);
+      
+    } catch (error) {
+      setNotificationMessage({
+        type: 'error',
+        message: error.message || 'Failed to update notification preferences'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Success Notification */}
-      <div 
-        id="notification" 
-        className="fixed bottom-0 inset-x-0 transform translate-y-full transition-transform duration-300 ease-in-out"
-      >
-        <div className="max-w-md mx-auto mb-4 bg-green-50 border-l-4 border-green-500 p-4 shadow-lg rounded-md">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-green-800">Settings updated successfully!</p>
-            </div>
-          </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
+      
+      {/* Notification Message */}
+      {notificationMessage.message && (
+        <div className={`mb-6 p-4 rounded-md ${
+          notificationMessage.type === 'success' 
+            ? 'bg-green-50 text-green-800 border border-green-200' 
+            : 'bg-red-50 text-red-800 border border-red-200'
+        }`}>
+          {notificationMessage.message}
         </div>
+      )}
+      
+      {/* Settings Tabs */}
+      <div className="border-b border-gray-200 mb-8">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('account')}
+            className={`${
+              activeTab === 'account'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium flex items-center`}
+          >
+            <UserIcon className="h-5 w-5 mr-2" />
+            Account
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`${
+              activeTab === 'security'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium flex items-center`}
+          >
+            <LockClosedIcon className="h-5 w-5 mr-2" />
+            Security
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`${
+              activeTab === 'notifications'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium flex items-center`}
+          >
+            <BellIcon className="h-5 w-5 mr-2" />
+            Notifications
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('preferences')}
+            className={`${
+              activeTab === 'preferences'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium flex items-center`}
+          >
+            <CogIcon className="h-5 w-5 mr-2" />
+            Preferences
+          </button>
+        </nav>
       </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">User Settings</h1>
-          <p className="mt-2 text-sm text-gray-600">Manage your account preferences and settings</p>
-        </header>
-
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Navigation */}
-          <div className="lg:w-64 flex-shrink-0">
-            <nav className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="p-4 border-b border-gray-200">
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <span className="text-indigo-600 font-bold">US</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">User Settings</p>
-                    <p className="text-xs text-gray-500">user@example.com</p>
-                  </div>
+      
+      {/* Account Settings */}
+      {activeTab === 'account' && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Account Information</h2>
+            <p className="text-gray-600 mb-6">
+              Update your basic account information.
+            </p>
+            
+            <form onSubmit={handleAccountSubmit}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleInputChange}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                  {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username}</p>}
+                </div>
+                
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                  {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
               </div>
-              <div className="py-2">
-                <button 
-                  onClick={() => setActiveTab('account')}
-                  className={`w-full text-left px-4 py-3 flex items-center space-x-3 ${activeTab === 'account' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  <UserIcon className="h-5 w-5" />
-                  <span className="text-sm font-medium">Account Information</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('notifications')}
-                  className={`w-full text-left px-4 py-3 flex items-center space-x-3 ${activeTab === 'notifications' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  <BellIcon className="h-5 w-5" />
-                  <span className="text-sm font-medium">Notifications</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('security')}
-                  className={`w-full text-left px-4 py-3 flex items-center space-x-3 ${activeTab === 'security' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  <LockClosedIcon className="h-5 w-5" />
-                  <span className="text-sm font-medium">Security</span>
-                </button>
-              </div>
-            </nav>
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1">
-            <form onSubmit={handleSettingsSubmit} className="space-y-6">
-              {/* Account Information */}
-              {activeTab === 'account' && (
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-2">
-                      <UserIcon className="h-5 w-5 text-gray-500" />
-                      <h2 className="text-lg font-medium text-gray-900">Account Information</h2>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                      <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                          Username
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <input
-                            id="username"
-                            value={formData.username}
-                            onChange={handleInputChange}
-                            className={`block w-full pr-10 focus:outline-none sm:text-sm rounded-md ${errors.username ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'}`}
-                            placeholder="Your username"
-                            aria-invalid={errors.username ? "true" : "false"}
-                            aria-describedby={errors.username ? "username-error" : undefined}
-                          />
-                          {errors.username && (
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                              <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        {errors.username && <p className="mt-2 text-sm text-red-600" id="username-error">{errors.username}</p>}
-                      </div>
-                      <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                          Email Address
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <input
-                            id="email"
-                            type="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            className={`block w-full pr-10 focus:outline-none sm:text-sm rounded-md ${errors.email ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'}`}
-                            placeholder="your.email@example.com"
-                            aria-invalid={errors.email ? "true" : "false"}
-                            aria-describedby={errors.email ? "email-error" : undefined}
-                          />
-                          {errors.email && (
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                              <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        {errors.email && <p className="mt-2 text-sm text-red-600" id="email-error">{errors.email}</p>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Notification Preferences */}
-              {activeTab === 'notifications' && (
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-2">
-                      <BellIcon className="h-5 w-5 text-gray-500" />
-                      <h2 className="text-lg font-medium text-gray-900">Notification Preferences</h2>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <p className="text-sm text-gray-500 mb-6">Choose how you want to be notified about updates, news, and account activity.</p>
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Communication channels</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <input
-                                id="emailNotifications"
-                                type="checkbox"
-                                checked={notificationSettings.emailNotifications}
-                                onChange={() => toggleNotification('emailNotifications')}
-                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                              <label htmlFor="emailNotifications" className="ml-3">
-                                <span className="block text-sm font-medium text-gray-700">Email Notifications</span>
-                                <span className="block text-xs text-gray-500">Receive updates directly to your inbox</span>
-                              </label>
-                            </div>
-                            <span className="text-xs text-gray-500">Daily</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <input
-                                id="smsNotifications"
-                                type="checkbox"
-                                checked={notificationSettings.smsNotifications}
-                                onChange={() => toggleNotification('smsNotifications')}
-                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                              <label htmlFor="smsNotifications" className="ml-3">
-                                <span className="block text-sm font-medium text-gray-700">SMS Notifications</span>
-                                <span className="block text-xs text-gray-500">Get text alerts for important updates</span>
-                              </label>
-                            </div>
-                            <span className="text-xs text-gray-500">Immediate</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <input
-                                id="pushNotifications"
-                                type="checkbox"
-                                checked={notificationSettings.pushNotifications}
-                                onChange={() => toggleNotification('pushNotifications')}
-                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                              <label htmlFor="pushNotifications" className="ml-3">
-                                <span className="block text-sm font-medium text-gray-700">Push Notifications</span>
-                                <span className="block text-xs text-gray-500">Receive alerts on your device</span>
-                              </label>
-                            </div>
-                            <span className="text-xs text-gray-500">Immediate</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Notification types</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center">
-                            <input
-                              id="weeklyDigest"
-                              type="checkbox"
-                              checked={notificationSettings.weeklyDigest}
-                              onChange={() => toggleNotification('weeklyDigest')}
-                              className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                            />
-                            <label htmlFor="weeklyDigest" className="ml-3">
-                              <span className="block text-sm font-medium text-gray-700">Weekly Digest</span>
-                              <span className="block text-xs text-gray-500">Get a summary of your account activity</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Security Settings */}
-              {activeTab === 'security' && (
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="px-6 py-5 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center space-x-2">
-                      <LockClosedIcon className="h-5 w-5 text-gray-500" />
-                      <h2 className="text-lg font-medium text-gray-900">Security</h2>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900 mb-4">Change Password</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                          <div>
-                            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                              Current Password
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                              <input
-                                id="currentPassword"
-                                type="password"
-                                value={formData.currentPassword}
-                                onChange={handleInputChange}
-                                className={`block w-full pr-10 focus:outline-none sm:text-sm rounded-md ${errors.currentPassword ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'}`}
-                                placeholder="••••••••"
-                                aria-invalid={errors.currentPassword ? "true" : "false"}
-                                aria-describedby={errors.currentPassword ? "currentPassword-error" : undefined}
-                              />
-                              {errors.currentPassword && (
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                  <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                  </svg>
-                                </div>
-                              )}
-                            </div>
-                            {errors.currentPassword && <p className="mt-2 text-sm text-red-600" id="currentPassword-error">{errors.currentPassword}</p>}
-                          </div>
-                          <div>
-                            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                              New Password
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                              <input
-                                id="newPassword"
-                                type="password"
-                                value={formData.newPassword}
-                                onChange={handleInputChange}
-                                className={`block w-full focus:outline-none sm:text-sm rounded-md ${errors.newPassword ? 'border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'}`}
-                                placeholder="••••••••"
-                              />
-                            </div>
-                            <p className="mt-2 text-xs text-gray-500">Must be at least 8 characters with uppercase, lowercase, number, and special character</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Save Button */}
-              <div className="flex justify-end">
+              
+              <div className="mt-6 flex justify-end">
                 <button
                   type="submit"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition"
+                  disabled={isSubmitting}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <CogIcon className="h-4 w-4 mr-2" />
-                  Save Changes
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      </div>
+      )}
+      
+      {/* Security Settings */}
+      {activeTab === 'security' && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Password</h2>
+            <p className="text-gray-600 mb-6">
+              Update your password to keep your account secure.
+            </p>
+            
+            <form onSubmit={handlePasswordSubmit}>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    id="currentPassword"
+                    name="currentPassword"
+                    value={formData.currentPassword}
+                    onChange={handleInputChange}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                  {errors.currentPassword && <p className="mt-1 text-sm text-red-600">{errors.currentPassword}</p>}
+                </div>
+                
+                <div>
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="newPassword"
+                    name="newPassword"
+                    value={formData.newPassword}
+                    onChange={handleInputChange}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                  {errors.newPassword && <p className="mt-1 text-sm text-red-600">{errors.newPassword}</p>}
+                </div>
+                
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  />
+                  {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isSubmitting ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Notification Settings */}
+      {activeTab === 'notifications' && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Notification Preferences</h2>
+            <p className="text-gray-600 mb-6">
+              Control how you receive notifications from our platform.
+            </p>
+            
+            <form onSubmit={handleNotificationsSubmit}>
+              <fieldset>
+                <legend className="text-base font-medium text-gray-700 mb-4">Notification Methods</legend>
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <input
+                      id="emailNotifications"
+                      name="emailNotifications"
+                      type="checkbox"
+                      checked={notificationSettings.emailNotifications}
+                      onChange={handleNotificationChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="emailNotifications" className="ml-3 text-sm text-gray-700">
+                      Email Notifications
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      id="smsNotifications"
+                      name="smsNotifications"
+                      type="checkbox"
+                      checked={notificationSettings.smsNotifications}
+                      onChange={handleNotificationChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="smsNotifications" className="ml-3 text-sm text-gray-700">
+                      SMS Notifications
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      id="pushNotifications"
+                      name="pushNotifications"
+                      type="checkbox"
+                      checked={notificationSettings.pushNotifications}
+                      onChange={handleNotificationChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="pushNotifications" className="ml-3 text-sm text-gray-700">
+                      Push Notifications
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      id="weeklyDigest"
+                      name="weeklyDigest"
+                      type="checkbox"
+                      checked={notificationSettings.weeklyDigest}
+                      onChange={handleNotificationChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="weeklyDigest" className="ml-3 text-sm text-gray-700">
+                      Weekly Digest
+                    </label>
+                  </div>
+                </div>
+              </fieldset>
+              
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Preferences'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Preferences Settings */}
+      {activeTab === 'preferences' && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Display Preferences</h2>
+            <p className="text-gray-600 mb-6">
+              Customize your viewing experience.
+            </p>
+            
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
+                  Language
+                </label>
+                <select
+                  id="language"
+                  name="language"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                >
+                  <option value="en">English</option>
+                  <option value="es">Spanish</option>
+                  <option value="fr">French</option>
+                  <option value="de">German</option>
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Timezone
+                </label>
+                <select
+                  id="timezone"
+                  name="timezone"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                >
+                  <option value="utc">UTC</option>
+                  <option value="est">Eastern Time (EST/EDT)</option>
+                  <option value="cst">Central Time (CST/CDT)</option>
+                  <option value="mst">Mountain Time (MST/MDT)</option>
+                  <option value="pst">Pacific Time (PST/PDT)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Save Preferences
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

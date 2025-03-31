@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const Navigation = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -17,21 +18,21 @@ const Navigation = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-20">
           <div className="flex items-center">
-            <a href="/" className="text-2xl font-bold text-indigo-900 hover:text-indigo-700 transition-colors flex items-center">
+            <Link to="/" className="text-2xl font-bold text-indigo-900 hover:text-indigo-700 transition-colors flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
               <span className="font-serif">Cultural<span className="text-amber-500">Heritage</span></span>
-            </a>
+            </Link>
             <div className="hidden sm:ml-8 sm:flex sm:space-x-1">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.name}
-                  href={item.href}
+                  to={item.href}
                   className="text-gray-700 hover:text-indigo-600 px-4 py-2 mx-1 text-sm font-medium border-b-2 border-transparent hover:border-amber-400 transition-all rounded-lg hover:bg-indigo-50"
                 >
                   {item.name}
-                </a>
+                </Link>
               ))}
             </div>
           </div>
@@ -49,10 +50,10 @@ const Navigation = () => {
               </button>
             </form>
             <div className="hidden sm:flex space-x-3">
-              <a href="/login" className="text-indigo-700 hover:text-indigo-900 font-medium px-4 py-2 border border-transparent hover:border-indigo-200 rounded-full transition-all">Log in</a>
-              <a href="/register" className="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white hover:from-indigo-700 hover:to-indigo-900 px-5 py-2 rounded-full font-medium transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
+              <Link to="/login" className="text-indigo-700 hover:text-indigo-900 font-medium px-4 py-2 border border-transparent hover:border-indigo-200 rounded-full transition-all">Log in</Link>
+              <Link to="/register" className="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white hover:from-indigo-700 hover:to-indigo-900 px-5 py-2 rounded-full font-medium transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
                 Sign up
-              </a>
+              </Link>
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -68,14 +69,14 @@ const Navigation = () => {
       {isMobileMenuOpen && (
         <div className="sm:hidden bg-white shadow-lg px-4 py-6 border-t border-gray-100 animate-fadeIn">
           {navItems.map((item) => (
-            <a
+            <Link
               key={item.name}
-              href={item.href}
+              to={item.href}
               className="block py-3 text-gray-700 hover:text-indigo-600 font-medium border-b border-gray-100 hover:pl-2 transition-all"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {item.name}
-            </a>
+            </Link>
           ))}
           <div className="mt-6 flex flex-col space-y-3">
             <form className="relative mb-4">
@@ -90,10 +91,10 @@ const Navigation = () => {
                 </svg>
               </button>
             </form>
-            <a href="/login" className="block text-indigo-700 hover:text-indigo-900 font-medium py-3 border border-indigo-100 rounded-lg text-center hover:bg-gray-50">Log in</a>
-            <a href="/register" className="block bg-gradient-to-r from-indigo-600 to-indigo-800 text-white hover:from-indigo-700 hover:to-indigo-300 py-3 rounded-lg font-medium text-center shadow-md">
+            <Link to="/login" className="block text-indigo-700 hover:text-indigo-900 font-medium py-3 border border-indigo-100 rounded-lg text-center hover:bg-gray-50">Log in</Link>
+            <Link to="/register" className="block bg-gradient-to-r from-indigo-600 to-indigo-800 text-white hover:from-indigo-700 hover:to-indigo-300 py-3 rounded-lg font-medium text-center shadow-md">
               Sign up
-            </a>
+            </Link>
           </div>
         </div>
       )}

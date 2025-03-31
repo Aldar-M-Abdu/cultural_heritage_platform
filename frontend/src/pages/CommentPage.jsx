@@ -1,21 +1,52 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import CommentList from '../components/CommentList';
+import { commentsService } from '../services/commentsService';
+import  authService  from '../services/authService';
 
 const CommentPage = () => {
+  const { itemId } = useParams();
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState([]);
   const [charCount, setCharCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const MAX_CHARS = 500;
   const MIN_CHARS = 5;
 
-  // Simulated current user (in real app, this would come from auth context)
-  const currentUser = { id: 'user1', name: 'Current User' };
+  // Get current user from auth service
+  const currentUser = authService.getCurrentUser() || { id: 'guest', name: 'Guest User' };
 
   useEffect(() => {
     setCharCount(comment.length);
   }, [comment]);
+
+  // Fetch comments when component mounts
+  useEffect(() => {
+    if (itemId) {
+      fetchComments();
+    }
+  }, [itemId]);
+
+  const fetchComments = async () => {
+    setIsLoading(true);
+    try {
+      if (itemId) {
+        const data = await commentsService.getComments(itemId);
+        setComments(data || []);
+      } else {
+        // Simulate API for demo purposes
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setComments([]);
+      }
+    } catch (err) {
+      setError('Failed to load comments');
+      console.error('Error fetching comments:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleCommentChange = useCallback((e) => {
     const value = e.target.value;
@@ -41,18 +72,29 @@ const CommentPage = () => {
     setError('');
 
     try {
-      const newComment = {
-        id: Date.now(),
-        text: comment,
-        timestamp: new Date().toISOString(),
-        user: { ...currentUser },
-        replies: []
-      };
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API
-      setComments(prev => [newComment, ...prev]);
+      if (itemId) {
+        // Real API call
+        const newComment = await commentsService.addComment({
+          itemId,
+          text: comment,
+          userId: currentUser.id
+        });
+        setComments(prev => [newComment, ...prev]);
+      } else {
+        // Simulated API for demo
+        const newComment = {
+          id: Date.now(),
+          text: comment,
+          timestamp: new Date().toISOString(),
+          user: { ...currentUser },
+          replies: []
+        };
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setComments(prev => [newComment, ...prev]);
+      }
       setComment('');
     } catch (err) {
-      setError('Failed to submit comment');
+      setError(err.detail || 'Failed to submit comment');
     } finally {
       setIsSubmitting(false);
     }

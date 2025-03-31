@@ -1,27 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useQuery } from 'react-query';
-import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import useAuthStore from '../stores/authStore';
+import { itemsService } from '../services/itemsService';
 import CulturalItemCard from '../components/CulturalItemCard';
 
 const ProfilePage = () => {
-  const { user, updateUserProfile } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateProfile, changePassword } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || null);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
   const [passwordChangeError, setPasswordChangeError] = useState(null);
+  const [userContributions, setUserContributions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm({
     defaultValues: {
-      full_name: user.full_name || '',
-      email: user.email || '',
-      bio: user.bio || '',
-      organization: user.organization || '',
+      email: user?.email || '',
+      bio: user?.bio || '',
+      organization: user?.organization || '',
     },
   });
 
-  const { register: registerPassword, handleSubmit: handleSubmitPassword, formState: { errors: passwordErrors } } = useForm({
+  const { register: registerPassword, handleSubmit: handleSubmitPassword, formState: { errors: passwordErrors }, reset: resetPasswordForm } = useForm({
     defaultValues: {
       current_password: '',
       new_password: '',
@@ -30,40 +33,68 @@ const ProfilePage = () => {
   });
 
   // Fetch user contributions
-  const { 
-    data: contributions,
-    isLoading: contributionsLoading,
-    error: contributionsError,
-    refetch: refetchContributions
-  } = useQuery(
-    ['userContributions', user?.id],
-    () => Promise.resolve([]), // Mocked contributions
-    {
-      enabled: !!user?.id
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserContributions();
     }
-  );
+  }, [user?.id]);
 
-  const handleProfileSubmit = async (data) => {
+  const fetchUserContributions = async () => {
+    setIsLoading(true);
     try {
-      await updateUserProfile(data);
-      alert('Profile updated successfully!');
+      // This would be replaced with an actual API call in a real implementation
+      // const contributions = await itemsService.getUserContributions(user.id);
+      const mockContributions = []; // Mock data - replace with actual API call
+      setUserContributions(mockContributions);
     } catch (error) {
-      console.error('Failed to update profile:', error);
-      alert('Failed to update profile. Please try again.');
+      console.error('Failed to fetch contributions:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handlePasswordSubmit = async (data) => {
+  const handleProfileSubmit = async (data) => {
     try {
-      setPasswordChangeError(null);
-      console.log('Password changed:', data);
+      // Update profile information
+      await updateProfile({
+        email: data.email,
+        bio: data.bio,
+        organization: data.organization
+      });
+      
+      // Show success notification or handle successful update
+      // For example:
+      alert('Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      // Handle error, show error message
+    }
+  };
+  
+  // Handle password change
+  const handlePasswordChange = async (data) => {
+    try {
+      if (data.new_password !== data.confirm_password) {
+        setPasswordChangeError('Passwords do not match');
+        return;
+      }
+      
+      await changePassword({
+        currentPassword: data.current_password,
+        newPassword: data.new_password
+      });
+      
+      resetPasswordForm();
       setPasswordChangeSuccess(true);
+      setPasswordChangeError(null);
+      setIsPasswordModalOpen(false);
+      
+      // Reset success message after 3 seconds
       setTimeout(() => {
-        setIsPasswordModalOpen(false);
         setPasswordChangeSuccess(false);
       }, 3000);
     } catch (error) {
-      setPasswordChangeError('Failed to change password. Please try again.');
+      setPasswordChangeError(error.message || 'Failed to change password');
     }
   };
 
@@ -86,9 +117,12 @@ const ProfilePage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">You need to be logged in to view your profile</h2>
-          <a href="/login" className="btn btn-primary">
+          <button 
+            onClick={() => navigate('/login')}
+            className="btn bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+          >
             Log In
-          </a>
+          </button>
         </div>
       </div>
     );
@@ -136,12 +170,12 @@ const ProfilePage = () => {
                   {avatarPreview ? (
                     <img 
                       src={avatarPreview} 
-                      alt={user.full_name} 
+                      alt={user.username} 
                       className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-primary-100 text-primary-800 text-3xl font-medium">
-                      {user.full_name?.charAt(0) || '?'}
+                      {user.username?.charAt(0) || '?'}
                     </div>
                   )}
                 </div>
@@ -182,20 +216,6 @@ const ProfilePage = () => {
                     JPG, PNG or GIF. Max 2MB.
                   </p>
                 </div>
-              </div>
-              
-              {/* Full Name */}
-              <div>
-                <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name
-                </label>
-                <input
-                  id="full_name"
-                  {...register('full_name', { required: 'Name is required' })}
-                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  placeholder="Your full name"
-                />
-                {errors.full_name && <p className="mt-1 text-sm text-red-600">{errors.full_name.message}</p>}
               </div>
               
               {/* Email */}
@@ -274,15 +294,11 @@ const ProfilePage = () => {
             </a>
           </div>
           
-          {contributionsLoading ? (
+          {isLoading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
             </div>
-          ) : contributionsError ? (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-              Failed to load your contributions. Please try again.
-            </div>
-          ) : !contributions?.data || contributions.data.length === 0 ? (
+          ) : !userContributions.length ? (
             <div className="bg-white shadow rounded-lg p-6 text-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -297,7 +313,7 @@ const ProfilePage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {contributions.data.map(item => (
+              {userContributions.map(item => (
                 <div key={item.id} className="relative">
                   <CulturalItemCard item={item} />
                   <div className="absolute top-2 left-2 flex space-x-2">
@@ -315,7 +331,8 @@ const ProfilePage = () => {
                         if (window.confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
                           try {
                             // Corrected syntax for try-catch block
-                            refetchContributions();
+                            await itemsService.deleteItem(item.id);
+                            fetchUserContributions();
                           } catch (error) {
                             console.error(error);
                             alert('Failed to delete item. Please try again.');

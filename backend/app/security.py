@@ -1,95 +1,152 @@
-import secrets
-from datetime import datetime, timedelta
-from typing import Optional, Union
-from fastapi import Depends, HTTPException, status
+import base64
+from datetime import UTC, datetime, timedelta
+from random import SystemRandom
+from typing import Annotated, Optional
+from uuid import UUID
+
+from app.api.v1.core.models import Token, User
+from app.db_setup import get_db
+from app.settings import settings
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.settings import settings
-from app.db_setup import get_db
-from app.api.v1.core.models import User, Token
-from app.api.v1.core.schemas import TokenData
-from app.utils import create_access_token, decode_token  # Ensure utils is correctly imported
-
-# Password and authentication
+# Make tokenUrl consistent with our API structure
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token", auto_error=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = OAuth2PasswordBearer(tokenUrl="/api/auth/login")  # Updated to use OAuth2PasswordBearer
+
+DEFAULT_ENTROPY = 32
+_sysrand = SystemRandom()
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password):
+def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_db_token(db: Session, user_id: int):
-    token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    db_token = Token(
-        token=token,
-        user_id=user_id,
-        expires_at=expires_at
-    )
-    db.add(db_token)
+def token_bytes(nbytes=None) -> bytes:
+    if nbytes is None:
+        nbytes = DEFAULT_ENTROPY
+    return _sysrand.randbytes(nbytes)
+
+
+def token_urlsafe(nbytes=None) -> str:
+    tok = token_bytes(nbytes)
+    return base64.urlsafe_b64encode(tok).rstrip(b"=").decode("ascii")
+
+
+def create_database_token(user_id: UUID, db: Session) -> Token:
+    randomized_token = token_urlsafe()
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    new_token = Token(token=randomized_token, user_id=user_id, expires_at=expires_at)
+    db.add(new_token)
     db.commit()
+    return new_token
+
+
+def verify_token_access(token_str: str, db: Session) -> Token:
+    max_age = timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    token = (
+        db.execute(
+            select(Token).where(
+                Token.token == token_str,
+                Token.expires_at > datetime.now(UTC),
+                Token.created >= datetime.now(UTC) - max_age,
+                Token.is_revoked == False,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalid or expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return token
 
 
-def get_current_user(db: Session = Depends(get_db), token: str = Depends(security)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials"
-    )
-    try:
-        payload = decode_token(token)  # Updated to use correct function
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except Exception:
-        raise credentials_exception
-
-    db_token = db.query(Token).filter(
-        Token.token == token,
-        Token.expires_at > datetime.utcnow(),
-        Token.is_revoked == False
-    ).first()
-    
-    if not db_token:
-        raise credentials_exception
-        
-    user = db.query(User).filter(User.id == db_token.user_id).first()
+def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
+) -> User:
+    token = verify_token_access(token_str=token, db=db)
+    user = token.user
     if not user:
-        raise credentials_exception
-        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
-def revoke_token(db: Session, token: str):
-    db_token = db.query(Token).filter(Token.token == token).first()
+def get_current_active_user(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
+        )
+    return current_user
+
+
+def get_current_superuser(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized. Admin privileges required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return current_user
+
+
+# Add alias for get_current_superuser to maintain compatibility
+def get_admin_user(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+) -> User:
+    return get_current_superuser(current_user)
+
+
+def revoke_token(token: Annotated[str, Depends(oauth2_scheme)], db: Session) -> None:
+    db_token = db.execute(
+        select(Token).where(Token.token == token)
+    ).scalars().first()
     if db_token:
         db_token.is_revoked = True
         db.commit()
 
 
-def get_current_active_user(current_user: User = Depends(get_current_user)):
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
+def get_current_token(
+    token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
+) -> Token:
+    token = verify_token_access(token_str=token, db=db)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token
 
 
-def get_admin_user(current_user: User = Depends(get_current_active_user)):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-    return current_user
+def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme), 
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Similar to get_current_user but doesn't raise an exception if no valid token is provided."""
+    if token is None:
+        return None
+    
+    try:
+        token_obj = verify_token_access(token_str=token, db=db)
+        return token_obj.user
+    except HTTPException:
+        return None

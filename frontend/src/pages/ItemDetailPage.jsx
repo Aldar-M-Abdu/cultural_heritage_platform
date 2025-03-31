@@ -49,7 +49,7 @@ const ItemDetailPage = () => {
   return (
     <div className="bg-stone-50 min-h-screen">
       {/* Hero banner with subtle pattern background */}
-      <div className="bg-gradient-to-r from-amber-700/90 to-amber-900/90 bg-blend-multiply bg-[url('/public/pattern-bg.png')] shadow-md">
+      <div className="bg-[url('/public/pattern-bg.png')] from-blue-50 to-blue-100 p-4 md:p-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-white mb-4">{item.name}</h1>
           

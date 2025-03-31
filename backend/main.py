@@ -1,46 +1,91 @@
+import logging
+import signal
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
-
-from app.api.v1 import routers  # Ensure correct imports
+from contextlib import asynccontextmanager
+from app.api.v1.routers import router
 from app.settings import settings
-from app.api.v1.core.endpoints import users, items, cultural_items, comments, authentication
+from app.db_setup import init_db, is_db_connected
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description=settings.DESCRIPTION,
-    version=settings.VERSION,
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-# Set up CORS
+def log_startup_config(app: FastAPI):
+    """Log all routes for debugging purposes"""
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        name = getattr(route, "name", None)
+        methods = getattr(route, "methods", None)
+        if path:
+            logging.info(f"Route: {path}, Name: {name}, Methods: {methods}")
+
+# Lifespan function for initializing resources
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: initialize the database
+    try:
+        # Check DB connection before initializing
+        if not is_db_connected():
+            logging.warning("Database connection failed - will retry on first request")
+        else:
+            init_db()
+            logging.info("Database initialized successfully")
+        
+        log_startup_config(app)
+    except Exception as e:
+        logging.error(f"Failed to initialize database: {str(e)}")
+        # Don't re-raise the exception - this allows the app to start even with DB issues
+    
+    try:
+        # Yield control to the application
+        yield
+    except (KeyboardInterrupt, asyncio.CancelledError) as e:
+        # Just log the shutdown event, but don't do anything else that might raise exceptions
+        logging.info(f"Application shutdown initiated by {type(e).__name__}")
+    except Exception as e:
+        logging.error(f"Unhandled exception during application lifecycle: {str(e)}")
+    finally:
+        # Shutdown: cleanup resources if needed
+        logging.info("Shutting down application")
+
+# Create FastAPI app with enhanced error handling
+app = FastAPI(
+    lifespan=lifespan, 
+    title="Cultural Heritage Platform API",
+    description="API for managing cultural heritage items",
+    version="1.0.0"
+)
+
+# Include API router with all endpoints
+app.include_router(router, prefix="/api/v1")
+
+# Set up CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for development purposes
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routers with tags
-app.include_router(routers.router, prefix=settings.API_PREFIX, tags=["General"])
-app.include_router(users.router, prefix=settings.API_PREFIX, tags=["Users"])
-app.include_router(items.router, prefix=settings.API_PREFIX, tags=["Items"])
-app.include_router(cultural_items.router, prefix=settings.API_PREFIX, tags=["Cultural Items"])
-app.include_router(comments.router, prefix=settings.API_PREFIX, tags=["Comments"])
-app.include_router(authentication.router, prefix=settings.API_PREFIX, tags=["Authentication"])
-
 @app.get("/")
 def root():
-    return {
-        "message": "Welcome to the Cultural Heritage Platform API",
-        "docs": "/docs",
-        "version": settings.VERSION
-    }
-
+    return {"message": "Cultural Heritage Platform API"}
 
 if __name__ == "__main__":
     import uvicorn
+    import asyncio
+    
+    # Configure proper signal handling for graceful shutdown
+    config = uvicorn.Config("main:app", host="0.0.0.0", port=8000, reload=True)
+    server = uvicorn.Server(config)
+    
+    # Run the server with proper signal handling
     try:
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-    except asyncio.exceptions.CancelledError:
-        pass
+        asyncio.run(server.serve())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logging.info("Server shutdown initiated by user")
