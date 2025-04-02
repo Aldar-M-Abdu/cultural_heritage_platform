@@ -1,36 +1,22 @@
 import api from './api';
 
-class CommentsService {
-  async getComments(itemId) {
-    try {
-      const response = await api.get(`/comments/items/${itemId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch comments:', error);
-      throw error;
-    }
-  }
+const commentsService = {
+  getComments: async (itemId) => {
+    return await api.get(`/cultural-items/${itemId}/comments`);
+  },
 
-  async addComment(commentData) {
-    try {
-      const response = await api.post('/comments', commentData);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to add comment:', error);
-      throw error;
-    }
-  }
+  addComment: async (commentData) => {
+    return await api.post('/comments', commentData);
+  },
 
-  async deleteComment(commentId) {
-    try {
-      const response = await api.delete(`/comments/${commentId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to delete comment:', error);
-      throw error;
-    }
-  }
-}
+  deleteComment: async (commentId) => {
+    return await api.delete(`/comments/${commentId}`);
+  },
 
-export const commentsService = new CommentsService();
+  replyToComment: async (commentId, replyData) => {
+    return await api.post(`/comments/${commentId}/replies`, replyData);
+  },
+};
+
+export { commentsService };
 export default commentsService;

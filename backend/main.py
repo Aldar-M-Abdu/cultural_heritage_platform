@@ -1,12 +1,24 @@
 import logging
 import signal
 import asyncio
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from app.api.v1.routers import router
 from app.settings import settings
 from app.db_setup import init_db, is_db_connected
+from app.api.v1.core.endpoints import authentication, cultural_items, comments
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Validate DATABASE_URL
+if not os.getenv("DB_URL"):
+    logging.error("DATABASE_URL environment variable is not set. Please check your .env file.")
+    raise ValueError("DATABASE_URL environment variable is required but not set.")
 
 # Configure logging
 logging.basicConfig(
@@ -60,13 +72,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Modified middleware: Skip API routes to prevent redirect loops
+@app.middleware("http")
+async def redirect_trailing_slash(request, call_next):
+    # Skip API routes to prevent redirect loops
+    if "/api/" in request.url.path:
+        return await call_next(request)
+    
+    if not request.url.path.endswith("/") and request.url.path != "/":
+        return RedirectResponse(url=f"{request.url.path}/", status_code=307)
+    return await call_next(request)
+
 # Include API router with all endpoints
 app.include_router(router, prefix="/api/v1")
+app.include_router(authentication.router, prefix="/api/v1/auth")
+app.include_router(cultural_items.router, prefix="/api/v1/cultural-items")
+app.include_router(comments.router, prefix="/api/v1/comments")
 
-# Set up CORS middleware
+# Set up CORS middleware with frontend URL from environment variables
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development purposes
+    allow_origins=[frontend_url],  # Use environment variable instead of hardcoded value
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,7 +101,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"message": "Cultural Heritage Platform API"}
+    return {"message": "Welcome to the Cultural Heritage Platform API"}
 
 if __name__ == "__main__":
     import uvicorn

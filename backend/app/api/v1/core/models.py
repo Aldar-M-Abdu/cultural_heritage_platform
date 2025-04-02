@@ -113,7 +113,7 @@ class Comment(Base):
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     cultural_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('cultural_items.id'), nullable=True)
     parent_comment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('comments.id'), nullable=True)
@@ -121,7 +121,7 @@ class Comment(Base):
     # Relationships
     user: Mapped["User"] = relationship("User")
     cultural_item: Mapped[Optional["CulturalItem"]] = relationship(back_populates="comments")
-    replies: Mapped[List["Comment"]] = relationship(backref="parent_comment", remote_side=[id])
+    replies: Mapped[List["Comment"]] = relationship("Comment", backref="parent_comment", remote_side=[id])
 
 
 class BlogPost(Base):
@@ -144,7 +144,7 @@ class Category(Base):
     __tablename__ = "categories"
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)    
     
     # Relationships
     blog_posts: Mapped[List["BlogPost"]] = relationship(back_populates="category")
@@ -186,5 +186,8 @@ class Item(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tags: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Comma separated tags
+    materials: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)  # Added field
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

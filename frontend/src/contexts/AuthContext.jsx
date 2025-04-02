@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react';
 import authService from '../services/authService';
 import useAuthStore from '../stores/authStore';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const { user, isAuthenticated, role } = useAuthStore();
@@ -43,5 +43,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-export default AuthContext;

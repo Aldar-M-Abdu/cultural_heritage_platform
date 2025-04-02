@@ -1,66 +1,36 @@
 import api from './api';
 
-class ItemsService {
-  async getAllItems(params = {}) {
-    try {
-      const response = await api.get('/items', { params });
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch items:', error);
-      throw error;
-    }
-  }
+const itemsService = {
+  getItems: async (params = {}) => {
+    // Filter out empty query parameters
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
+    );
+    const query = new URLSearchParams(filteredParams).toString();
+    return await api.get(`/cultural-items?${query}`);
+  },
 
-  async getItemById(id) {
-    try {
-      const response = await api.get(`/items/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Failed to fetch item with id ${id}:`, error);
-      throw error;
-    }
-  }
+  getItem: async (id) => {
+    // Renamed from getItemById to match the call in ItemDetailPage
+    return await api.get(`/cultural-items/${id}`);
+  },
 
-  async createItem(itemData) {
-    try {
-      const response = await api.post('/items', itemData);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to create item:', error);
-      throw error;
-    }
-  }
+  createItem: async (itemData) => {
+    return await api.post('/cultural-items', itemData);
+  },
 
-  async updateItem(id, itemData) {
-    try {
-      const response = await api.put(`/items/${id}`, itemData);
-      return response.data;
-    } catch (error) {
-      console.error(`Failed to update item with id ${id}:`, error);
-      throw error;
-    }
-  }
+  updateItem: async (id, itemData) => {
+    return await api.put(`/cultural-items/${id}`, itemData);
+  },
 
-  async deleteItem(id) {
-    try {
-      const response = await api.delete(`/items/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Failed to delete item with id ${id}:`, error);
-      throw error;
-    }
-  }
+  deleteItem: async (id) => {
+    return await api.delete(`/cultural-items/${id}`);
+  },
 
-  async getUserContributions(userId) {
-    try {
-      const response = await api.get(`/items/user/${userId}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Failed to fetch user contributions:`, error);
-      throw error;
-    }
-  }
-}
+  getFeaturedItems: async () => {
+    return await api.get('/cultural-items/featured');
+  },
+};
 
-export const itemsService = new ItemsService();
+export { itemsService };
 export default itemsService;

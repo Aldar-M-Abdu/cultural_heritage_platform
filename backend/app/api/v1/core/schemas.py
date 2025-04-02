@@ -248,6 +248,14 @@ class Tag(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MediaType(str, Enum):
+    """Valid media types for cultural item media"""
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    DOCUMENT = "document"
+
+
 class MediaBase(BaseModel):
     url: str
     type: str
@@ -266,7 +274,7 @@ class Media(BaseModel):
 
 class MediaCreate(BaseModel):
     url: str
-    media_type: str
+    media_type: MediaType  # Using the enum for validation
     title: str | None = None
     description: str | None = None
     cultural_item_id: UUID
@@ -318,6 +326,14 @@ class CulturalItem(BaseModel):
     tags: List[Tag] = []
     media: List[Media] = []
     model_config = ConfigDict(from_attributes=True)
+
+
+class CulturalItemDetail(CulturalItem):
+    media: List[Media] = []
+    comments: List[CommentSchema] = []
+
+    class Config:
+        from_attributes = True
 
 
 ### ARTIFACT SCHEMAS
@@ -384,3 +400,11 @@ class Item(ItemBase):
 
     class Config:
         from_attributes = True
+
+
+class PasswordResetRequestSchema(BaseModel):
+    email: EmailStr = Field(..., description="Email address for password reset")
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"email": "user@example.com"}}
+    )

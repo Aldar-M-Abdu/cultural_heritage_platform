@@ -7,9 +7,9 @@ from app.db_setup import get_db
 from app.api.v1.core.models import Comment
 from app.api.v1.core.schemas import CommentCreate, CommentSchema
 
-router = APIRouter(tags=["comments"], prefix="/comments")
+router = APIRouter(tags=["comments"])
 
-@router.post("/", response_model=CommentSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CommentSchema, status_code=status.HTTP_201_CREATED, operation_id="create_new_comment")
 def create_comment(comment: CommentCreate, db: Session = Depends(get_db)) -> CommentSchema:
     new_comment = Comment(**comment.model_dump())
     db.add(new_comment)
@@ -17,11 +17,11 @@ def create_comment(comment: CommentCreate, db: Session = Depends(get_db)) -> Com
     db.refresh(new_comment)
     return new_comment
 
-@router.get("/items/{item_id}", response_model=list[CommentSchema])
+@router.get("/items/{item_id}", response_model=list[CommentSchema], operation_id="get_item_comments")
 def get_comments(item_id: UUID, db: Session = Depends(get_db)) -> list[CommentSchema]:
     return db.execute(select(Comment).where(Comment.cultural_item_id == item_id)).scalars().all()
 
-@router.delete("/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{comment_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_item_comment")
 def delete_comment(comment_id: UUID, db: Session = Depends(get_db)):
     db_comment = db.execute(select(Comment).where(Comment.id == comment_id)).scalars().first()
     if not db_comment:

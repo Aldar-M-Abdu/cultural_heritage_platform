@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import CommentList from '../components/CommentList';
-import { commentsService } from '../services/commentsService';
-import  authService  from '../services/authService';
+import commentsService from '../services/commentsService'; // Updated import
+import useAuthStore from '../stores/authStore';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const CommentPage = () => {
   const { itemId } = useParams();
@@ -14,9 +15,10 @@ const CommentPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const MAX_CHARS = 500;
   const MIN_CHARS = 5;
-
-  // Get current user from auth service
-  const currentUser = authService.getCurrentUser() || { id: 'guest', name: 'Guest User' };
+  
+  // Get user from auth store instead of directly from service
+  const { user, isAuthenticated } = useAuthStore();
+  const currentUser = user || { id: 'guest', name: 'Guest User' };
 
   useEffect(() => {
     setCharCount(comment.length);
@@ -59,10 +61,16 @@ const CommentPage = () => {
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
 
+    if (!isAuthenticated) {
+      setError('Please sign in to post comments');
+      return;
+    }
+
     if (!comment.trim()) {
       setError('Comment cannot be empty');
       return;
     }
+    
     if (comment.length < MIN_CHARS) {
       setError(`Comment must be at least ${MIN_CHARS} characters`);
       return;
@@ -100,6 +108,46 @@ const CommentPage = () => {
     }
   };
 
+  const handleDeleteComment = async (commentId) => {
+    try {
+      await commentsService.deleteComment(commentId);
+      setComments(prev => prev.filter(comment => comment.id !== commentId));
+    } catch (err) {
+      setError('Failed to delete comment');
+    }
+  };
+
+  const handleReplyToComment = async (commentId, replyText) => {
+    if (!isAuthenticated) {
+      setError('Please sign in to reply to comments');
+      return;
+    }
+    
+    try {
+      const newReply = await commentsService.replyToComment(commentId, {
+        text: replyText,
+        userId: currentUser.id
+      });
+      
+      // Update the comments array with the new reply
+      const updatedComments = comments.map(comment => {
+        if (comment.id === commentId) {
+          return {
+            ...comment,
+            replies: [...(comment.replies || []), newReply]
+          };
+        }
+        return comment;
+      });
+      
+      setComments(updatedComments);
+      return true;
+    } catch (err) {
+      setError('Failed to add reply');
+      return false;
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 bg-gradient-to-b from-white to-gray-50 min-h-screen">
       <header className="mb-12">
@@ -115,6 +163,13 @@ const CommentPage = () => {
           </svg>
           Add a Comment
         </h2>
+        
+        {!isAuthenticated && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded relative mb-4" role="alert">
+            <p>You are not signed in. <a href="/login" className="font-medium underline">Sign in</a> to post comments.</p>
+          </div>
+        )}
+        
         <form onSubmit={handleCommentSubmit}>
           <div className="space-y-6">
             <div className="relative">
@@ -166,7 +221,7 @@ const CommentPage = () => {
                   disabled:bg-indigo-300 disabled:cursor-not-allowed
                   transition-all duration-300 flex items-center
                 `}
-                disabled={isSubmitting || !comment.trim() || comment.length < MIN_CHARS}
+                disabled={isSubmitting || !comment.trim() || comment.length < MIN_CHARS || !isAuthenticated}
               >
                 {isSubmitting ? (
                   <>
@@ -198,8 +253,17 @@ const CommentPage = () => {
           Community Conversation <span className="text-teal-600 ml-2 text-lg">({comments.length})</span>
         </h2>
         
-        {comments.length > 0 ? (
-          <CommentList comments={comments} currentUser={currentUser} />
+        {isLoading ? (
+          <div className="flex justify-center items-center py-12">
+            <LoadingSpinner size="lg" color="teal" />
+          </div>
+        ) : comments.length > 0 ? (
+          <CommentList 
+            comments={comments} 
+            currentUser={currentUser} 
+            onDelete={handleDeleteComment}
+            onReply={handleReplyToComment}
+          />
         ) : (
           <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
             <svg className="h-12 w-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

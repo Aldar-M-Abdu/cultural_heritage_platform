@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, ArrowUpTrayIcon, PlayCircleIcon, PhotoIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import useAuthStore from '../stores/authStore';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const CreateItemPage = () => {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isLoading } = useAuthStore();
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [formData, setFormData] = useState({
@@ -12,10 +17,23 @@ const CreateItemPage = () => {
     significance: '',
     description: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/login?redirect=create-item');
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
   const handleDragOver = (e) => {
@@ -30,7 +48,6 @@ const CreateItemPage = () => {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    
     const newFiles = Array.from(e.dataTransfer.files);
     addFiles(newFiles);
   };
@@ -41,17 +58,22 @@ const CreateItemPage = () => {
   };
 
   const addFiles = (newFiles) => {
-    // Filter for images, videos, and documents
     const validFiles = newFiles.filter(file => 
       file.type.startsWith('image/') || 
       file.type.startsWith('video/') || 
       file.type.startsWith('application/pdf')
     );
-    
-    if (validFiles.length > 0) {
+    const validSizedFiles = validFiles.filter(file => file.size <= 10 * 1024 * 1024);
+    if (validSizedFiles.length !== validFiles.length) {
+      setErrors(prev => ({
+        ...prev,
+        files: 'Some files exceed the maximum size of 10MB'
+      }));
+    }
+    if (validSizedFiles.length > 0) {
       setFiles(prevFiles => [
         ...prevFiles, 
-        ...validFiles.map(file => ({
+        ...validSizedFiles.map(file => ({
           file,
           id: Math.random().toString(36).substring(2),
           preview: file.type.startsWith('image/') 
@@ -82,12 +104,76 @@ const CreateItemPage = () => {
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Form data:', formData);
-    console.log('Files:', files);
-    // Here you would typically send the data to your API
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.name.trim()) {
+      newErrors.name = 'Item name is required';
+    }
+    if (!formData.category) {
+      newErrors.category = 'Category is required';
+    }
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    } else if (formData.description.trim().length < 20) {
+      newErrors.description = 'Description should be at least 20 characters';
+    }
+    if (!formData.significance.trim()) {
+      newErrors.significance = 'Cultural significance is required';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    if (!validateForm()) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const formDataToSubmit = new FormData();
+      formDataToSubmit.append('name', formData.name);
+      formDataToSubmit.append('category', formData.category);
+      formDataToSubmit.append('era', formData.era);
+      formDataToSubmit.append('location', formData.location);
+      formDataToSubmit.append('significance', formData.significance);
+      formDataToSubmit.append('description', formData.description);
+      files.forEach((fileObj, index) => {
+        formDataToSubmit.append(`file${index}`, fileObj.file);
+      });
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setSubmitSuccess(true);
+      setFormData({
+        name: '',
+        category: '',
+        era: '',
+        location: '',
+        significance: '',
+        description: ''
+      });
+      setFiles([]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        navigate('/items');
+      }, 3000);
+    } catch (error) {
+      console.error('Error submitting item:', error);
+      setSubmitError('Failed to create item. Please try again later.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-gray-50 min-h-screen">
@@ -97,6 +183,42 @@ const CreateItemPage = () => {
           Share your knowledge and help preserve cultural heritage for future generations.
         </p>
       </div>
+      
+      {submitSuccess && (
+        <div className="mb-8 bg-green-50 border border-green-200 text-green-800 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-green-800">Item created successfully!</h3>
+              <div className="mt-2 text-sm text-green-700">
+                <p>Your item has been added to our collection. You will be redirected shortly.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {submitError && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-800 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{submitError}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-8">
         <div className="bg-white shadow-sm rounded-lg overflow-hidden">
@@ -113,9 +235,13 @@ const CreateItemPage = () => {
                   type="text"
                   value={formData.name}
                   onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    errors.name ? 'border-red-300' : ''
+                  }`}
                 />
+                {errors.name && (
+                  <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                )}
               </div>
               
               <div>
@@ -127,8 +253,9 @@ const CreateItemPage = () => {
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    errors.category ? 'border-red-300' : ''
+                  }`}
                 >
                   <option value="" disabled>Select a category</option>
                   <option value="artifact">Artifact</option>
@@ -138,6 +265,9 @@ const CreateItemPage = () => {
                   <option value="site">Historical Site</option>
                   <option value="other">Other</option>
                 </select>
+                {errors.category && (
+                  <p className="mt-1 text-sm text-red-600">{errors.category}</p>
+                )}
               </div>
               
               <div>
@@ -180,10 +310,14 @@ const CreateItemPage = () => {
                   rows="4"
                   value={formData.description}
                   onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    errors.description ? 'border-red-300' : ''
+                  }`}
                   placeholder="Provide a detailed description of the item"
                 />
+                {errors.description && (
+                  <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+                )}
               </div>
               
               <div className="md:col-span-2">
@@ -196,10 +330,14 @@ const CreateItemPage = () => {
                   rows="4"
                   value={formData.significance}
                   onChange={handleChange}
-                  required
-                  className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  className={`shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md ${
+                    errors.significance ? 'border-red-300' : ''
+                  }`}
                   placeholder="Why is this item important? What is its cultural context?"
                 />
+                {errors.significance && (
+                  <p className="mt-1 text-sm text-red-600">{errors.significance}</p>
+                )}
               </div>
             </div>
           </div>
@@ -210,11 +348,10 @@ const CreateItemPage = () => {
               Add photos, videos, or documents related to this cultural heritage item.
             </p>
             
-            {/* File Upload Area */}
             <div 
               className={`mt-2 flex justify-center px-6 py-10 border-2 border-dashed rounded-md ${
                 isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
-              }`}
+              } ${errors.files ? 'border-red-300' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -242,10 +379,12 @@ const CreateItemPage = () => {
                 <p className="text-xs text-gray-500">
                   PNG, JPG, GIF, MP4, MOV, PDF up to 10MB
                 </p>
+                {errors.files && (
+                  <p className="text-sm text-red-600 mt-2">{errors.files}</p>
+                )}
               </div>
             </div>
             
-            {/* Preview Area */}
             {files.length > 0 && (
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {files.map(file => (
@@ -291,15 +430,27 @@ const CreateItemPage = () => {
         <div className="flex justify-end space-x-3">
           <button 
             type="button" 
+            onClick={() => navigate(-1)}
             className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            disabled={isSubmitting}
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center"
           >
-            Create Item
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating...
+              </>
+            ) : (
+              'Create Item'
+            )}
           </button>
         </div>
       </form>

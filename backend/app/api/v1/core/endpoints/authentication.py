@@ -1,5 +1,6 @@
 from typing import Annotated
-from datetime import timedelta
+from datetime import timedelta, datetime
+import secrets
 
 from app.api.v1.core.models import Token, User
 from app.api.v1.core.schemas import (
@@ -19,10 +20,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-router = APIRouter(tags=["auth"], prefix="/v1/auth")
+router = APIRouter(tags=["auth"])
 
 
-@router.post("/token")
+@router.post("/token", operation_id="get_access_token")
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Session = Depends(get_db),
@@ -34,53 +35,40 @@ def login(
         .scalars()
         .first()
     )
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_database_token(user_id=user.id, db=db)
     return {"access_token": access_token.token, "token_type": "bearer"}
 
 
-@router.post("/login")
+@router.post("/login", operation_id="login_user")
 def login_alternate(
-    username: str = Form(None),
-    password: str = Form(None),
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()] = None,
+    username: str = Form(...),  # Ensure username is required
+    password: str = Form(...),  # Ensure password is required
     db: Session = Depends(get_db),
 ) -> TokenSchema:
-    """Alternative login endpoint that accepts either form fields or OAuth2 form."""
-    if username and password and not form_data:
-        # Create OAuth2PasswordRequestForm object manually
-        class CustomFormData:
-            def __init__(self, username, password):
-                self.username = username
-                self.password = password
-                self.scope = ""
-                self.client_id = None
-                self.client_secret = None
-        
-        form_data = CustomFormData(username, password)
-    
-    if not form_data or not form_data.username or not form_data.password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username and password required"
+    user = (
+        db.execute(
+            select(User).where(User.username == username),
         )
-    
-    # Redirect to the standard login function
-    return login(form_data, db)
+        .scalars()
+        .first()
+    )
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_database_token(user_id=user.id, db=db)
+    return {"access_token": access_token.token, "token_type": "bearer"}
 
 
-@router.delete("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="logout_user")
 def logout(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -90,39 +78,36 @@ def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/user/create", status_code=status.HTTP_201_CREATED)
+@router.post("/user/create", response_model=UserOutSchema, status_code=status.HTTP_201_CREATED, operation_id="create_user")
 def register_user(
     user: UserRegisterSchema, db: Session = Depends(get_db)
 ) -> UserOutSchema:
-    hashed_password = hash_password(user.password)
-    # Map first_name and last_name to full_name
-    user_data = user.model_dump(exclude={"password"})
-    # Create full_name from first_name and last_name
-    full_name = f"{user_data.pop('first_name', '')} {user_data.pop('last_name', '')}".strip()
-    # Use email as username if not provided
-    username = user_data.get('username', user_data.get('email'))
-    
-    new_user = User(
-        username=username,
-        email=user_data.get('email'),
-        full_name=full_name,
-        hashed_password=hashed_password
-    )
-    
-    try:
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    except Exception as e:
-        db.rollback()
+    if db.execute(select(User).where(User.email == user.email)).scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already registered",
+            detail="Email is already registered",
+        )
+    if db.execute(select(User).where(User.username == user.username)).scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username is already taken",
         )
 
+    hashed_password = hash_password(user.password)
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        full_name=f"{user.first_name} {user.last_name}".strip(),
+        hashed_password=hashed_password,
+    )
 
-@router.put("/user/update", response_model=UserOutSchema)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.put("/user/update", response_model=UserOutSchema, operation_id="update_user_profile")
 def update_user(
     user: UserRegisterSchema,
     current_token: Token = Depends(get_current_token),
@@ -167,7 +152,7 @@ def update_user(
     return current_user
 
 
-@router.delete("/user/delete", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/user/delete", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_user_account")
 def delete_user(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -186,7 +171,7 @@ def delete_user(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/token/refresh")
+@router.post("/token/refresh", operation_id="refresh_access_token")
 def refresh_token(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -195,3 +180,98 @@ def refresh_token(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Token refresh functionality is disabled",
     )
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_200_OK, operation_id="request_password_reset_email")
+def request_password_reset(email: str = Form(...), db: Session = Depends(get_db)):
+    """Send a password reset email with a token"""
+    user = db.execute(select(User).where(User.email == email)).scalars().first()
+    
+    if not user:
+        # To prevent user enumeration, always return success even if email not found
+        return {"detail": "If your email is registered, you will receive a password reset link"}
+    
+    # Generate unique token (could use UUID or other secure method)
+    reset_token = secrets.token_urlsafe(32)
+    
+    # Store token in database with expiration (e.g., 24 hours)
+    # This is a simplified example - in a real app, you'd use a proper password_reset table
+    user.reset_token = reset_token
+    user.reset_token_expires = datetime.now() + timedelta(hours=24)
+    db.commit()
+    
+    # In a real app, you would send an email here with a link like:
+    # f"{frontend_url}/reset-password?token={reset_token}"
+    
+    return {"detail": "Password reset link sent"}
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_200_OK, operation_id="confirm_password_reset_token")
+def confirm_password_reset(token: str = Form(...), new_password: str = Form(...), db: Session = Depends(get_db)):
+    """Reset password using the token from email"""
+    user = db.execute(
+        select(User).where(
+            User.reset_token == token,
+            User.reset_token_expires > datetime.now()
+        )
+    ).scalars().first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Update password
+    user.hashed_password = hash_password(new_password)
+    
+    # Clear reset token
+    user.reset_token = None
+    user.reset_token_expires = None
+    
+    db.commit()
+    return {"detail": "Password has been reset successfully"}
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK, operation_id="change_user_password")
+def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    current_token: Token = Depends(get_current_token),
+    db: Session = Depends(get_db)
+):
+    """Change password when user is logged in"""
+    user = db.execute(select(User).where(User.id == current_token.user_id)).scalars().first()
+    
+    if not user or not verify_password(current_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    user.hashed_password = hash_password(new_password)
+    db.commit()
+    return {"detail": "Password changed successfully"}
+
+
+@router.get("/me", response_model=UserOutSchema, operation_id="get_current_user")
+def get_current_user(
+    current_token: Token = Depends(get_current_token),
+    db: Session = Depends(get_db),
+) -> UserOutSchema:
+    user = (
+        db.execute(select(User).where(User.id == current_token.user_id))
+        .scalars()
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
+    return user

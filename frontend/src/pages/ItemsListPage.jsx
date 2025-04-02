@@ -1,65 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import CulturalItemCard from '../components/CulturalItemCard';
 import CulturalItemListCard from '../components/CulturalItemListCard';
-// In a real app, this would come from an API
-const itemsData = [
-  {
-    id: 1,
-    title: "Viking Age Silver Necklace",
-    region: "Scandinavia",
-    time_period: "Viking Age (793-1066 CE)",
-    description: "Intricately designed silver necklace featuring traditional Norse patterns and dragon motifs. Found in a burial site near Stockholm.",
-    image_url: "/public/Viking Age Silver Necklace.jpg",
-    tags: [{ id: 1, name: "Jewelry" }, { id: 2, name: "Viking" }, { id: 3, name: "Metal work" }]
-  },
-  {
-    id: 2,
-    title: "Ancient Greek Amphora",
-    region: "Greece",
-    time_period: "Classical Period (480-323 BCE)",
-    description: "Red-figure amphora depicting scenes from the Trojan War. Well-preserved example of ancient Greek pottery.",
-    image_url: "/public/Ancient Greek Amphora.jpg",
-    tags: [{ id: 4, name: "Pottery" }, { id: 5, name: "Ancient Greece" }]
-  },
-  {
-    id: 3,
-    title: "Maya Jade Death Mask",
-    region: "Mesoamerica",
-    time_period: "Classic Maya Period (250-900 CE)",
-    description: "Ceremonial death mask made of jade mosaic pieces, likely belonging to a Maya ruler.",
-    image_url: "/public/Maya Jade Death Mask.jpg",
-    tags: [{ id: 6, name: "Ceremonial" }, { id: 7, name: "Maya" }, { id: 8, name: "Jade" }]
-  },
-  {
-    id: 4,
-    title: "Tang Dynasty Bronze Mirror",
-    region: "China",
-    time_period: "Tang Dynasty (618-907 CE)",
-    description: "Bronze mirror with intricate floral patterns and Buddhist symbols, showing the artistic sophistication of Tang Dynasty craftsmanship.",
-    image_url: "/public/tang_bronze_mirror.jpg",
-    tags: [{ id: 9, name: "Bronze" }, { id: 10, name: "Tang Dynasty" }]
-  },
-  {
-    id: 5,
-    title: "Medieval Illuminated Manuscript",
-    region: "Western Europe",
-    time_period: "High Middle Ages (1000-1250 CE)",
-    description: "Richly decorated religious manuscript with gold leaf illumination and detailed miniature paintings.",
-    image_url: "/public/Medieval Illuminated Manuscript.jpg",
-    tags: [{ id: 11, name: "Manuscript" }, { id: 12, name: "Medieval" }, { id: 13, name: "Religious" }]
-  },
-  {
-    id: 6,
-    title: "Persian Ceramic Bowl",
-    region: "Persia",
-    time_period: "Safavid Dynasty (1501-1736 CE)",
-    description: "Ceramic bowl featuring intricate Islamic calligraphy and floral patterns in cobalt blue glaze.",
-    image_url: "/public/Persian Ceramic Bowl.jpg",
-    tags: [{ id: 14, name: "Ceramics" }, { id: 15, name: "Islamic Art" }]
-  }
-];
+import Pagination from '../components/common/Pagination';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+import ItemSearchBar from '../components/ItemSearchBar';
+import { itemsService } from '../services/itemsService';
 
+// Keep these static for filter options
 const regions = [
   "Scandinavia",
   "Greece",
@@ -100,80 +48,115 @@ const popularTags = [
 ];
 
 const ItemsListPage = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState('');
-  const [selectedTag, setSelectedTag] = useState('');
-  const [filteredItems, setFilteredItems] = useState(itemsData);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [selectedRegion, setSelectedRegion] = useState(searchParams.get('region') || '');
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState(searchParams.get('period') || '');
+  const [selectedTag, setSelectedTag] = useState(searchParams.get('tag') || '');
+  const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
   const [activeFilters, setActiveFilters] = useState(0);
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
-  const [isLoading, setIsLoading] = useState(false);
+  const [viewMode, setViewMode] = useState(localStorage.getItem('itemsViewMode') || 'grid');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1', 10));
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(12);
 
-  // Filter items based on search and filter criteria
+  // Update the URL with filters and pagination
   useEffect(() => {
-    let filtered = [...itemsData];
-    let filterCount = 0;
+    const params = new URLSearchParams();
     
-    setIsLoading(true);
+    if (searchTerm) params.set('search', searchTerm);
+    if (selectedRegion) params.set('region', selectedRegion);
+    if (selectedTimePeriod) params.set('period', selectedTimePeriod);
+    if (selectedTag) params.set('tag', selectedTag);
+    if (currentPage > 1) params.set('page', currentPage.toString());
     
-    // Apply search term filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(item => 
-        item.title.toLowerCase().includes(term) || 
-        item.region.toLowerCase().includes(term) || 
-        item.description.toLowerCase().includes(term)
-      );
-      filterCount++;
-    }
-    
-    // Apply region filter
-    if (selectedRegion) {
-      filtered = filtered.filter(item => item.region === selectedRegion);
-      filterCount++;
-    }
-    
-    // Apply time period filter
-    if (selectedTimePeriod) {
-      filtered = filtered.filter(item => item.time_period === selectedTimePeriod);
-      filterCount++;
-    }
-    
-    // Apply tag filter
-    if (selectedTag) {
-      filtered = filtered.filter(item => 
-        item.tags.some(tag => tag.name === selectedTag)
-      );
-      filterCount++;
-    }
-    
-    // Simulate API delay
-    setTimeout(() => {
-      setFilteredItems(filtered);
-      setActiveFilters(filterCount);
-      setIsLoading(false);
-    }, 300);
-    
-  }, [searchTerm, selectedRegion, selectedTimePeriod, selectedTag]);
+    setSearchParams(params);
+  }, [searchTerm, selectedRegion, selectedTimePeriod, selectedTag, currentPage, setSearchParams]);
 
-  // Handle form submission
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Search logic is handled by the useEffect
-  };
+  // Save view mode preference
+  useEffect(() => {
+    localStorage.setItem('itemsViewMode', viewMode);
+  }, [viewMode]);
 
+  // Fetch items from database when component mounts or filters change
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const params = {
+          page: currentPage,
+          limit: itemsPerPage,
+          search: searchTerm,
+          region: selectedRegion,
+          period: selectedTimePeriod,
+          tag: selectedTag,
+        };
+
+        const response = await itemsService.getItems(params); // Updated to use the corrected endpoint
+        setItems(response.items || []);
+        setFilteredItems(response.items || []);
+        setTotalPages(response.pagination?.totalPages || 1);
+
+        setActiveFilters(
+          [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
+        );
+      } catch (err) {
+        console.error('Failed to fetch items:', err);
+        setError('Failed to load items. Please check your network connection or try again later.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [searchTerm, selectedRegion, selectedTimePeriod, selectedTag, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    const fetchFeaturedItems = async () => {
+      try {
+        const response = await itemsService.getFeaturedItems(); // Updated to use the corrected endpoint
+        setItems(response.items || []);
+      } catch (err) {
+        console.error('Failed to fetch featured items:', err);
+        setError('Failed to load featured items. Please try again later.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeaturedItems();
+  }, []);
+
+  // Handle search submissions
+  const handleSearchSubmit = useCallback((newSearchTerm) => {
+    setSearchTerm(newSearchTerm);
+    setCurrentPage(1); // Reset to first page on new search
+  }, []);
+
+  // Clear all filters
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedRegion('');
     setSelectedTimePeriod('');
     setSelectedTag('');
+    setCurrentPage(1);
+  };
+
+  // Handle pagination
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   return (
     <div className="bg-stone-50 min-h-screen">
       {/* Hero banner with background image */}
       <div className="relative bg-amber-900 text-white">
-        <div className="absolute inset-0 bg-[url('/public/museum-bg.jpg')] bg-cover bg-center mix-blend-overlay opacity-30"></div>
+        <div className="absolute inset-0 bg-[url('/museum-bg.jpg')] bg-cover bg-center mix-blend-overlay opacity-30"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold mb-4">Cultural Heritage Collection</h1>
           <p className="max-w-3xl text-lg sm:text-xl text-amber-100">
@@ -187,22 +170,13 @@ const ItemsListPage = () => {
         <div className="bg-white shadow-md rounded-xl overflow-hidden mb-10 border border-gray-100">
           <div className="p-6 md:p-8">
             {/* Search Bar */}
-            <form onSubmit={handleSubmit} className="mb-6">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by name, region, materials..."
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500 bg-gray-50"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </form>
+            <div className="mb-6">
+              <ItemSearchBar 
+                placeholder="Search by name, region, materials..." 
+                initialValue={searchTerm}
+                onSearch={handleSearchSubmit}
+              />
+            </div>
             
             {/* Filter Dropdowns */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -215,7 +189,10 @@ const ItemsListPage = () => {
                   id="region"
                   className="block w-full pl-3 pr-10 py-3 text-base border border-gray-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-lg bg-gray-50"
                   value={selectedRegion}
-                  onChange={(e) => setSelectedRegion(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedRegion(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option value="">All Regions</option>
                   {regions.map((region) => (
@@ -235,7 +212,10 @@ const ItemsListPage = () => {
                   id="timePeriod"
                   className="block w-full pl-3 pr-10 py-3 text-base border border-gray-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-lg bg-gray-50"
                   value={selectedTimePeriod}
-                  onChange={(e) => setSelectedTimePeriod(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedTimePeriod(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option value="">All Time Periods</option>
                   {timePeriods.map((period) => (
@@ -255,7 +235,10 @@ const ItemsListPage = () => {
                   id="tag"
                   className="block w-full pl-3 pr-10 py-3 text-base border border-gray-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-lg bg-gray-50"
                   value={selectedTag}
-                  onChange={(e) => setSelectedTag(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedTag(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 >
                   <option value="">All Categories</option>
                   {popularTags.map((tag) => (
@@ -393,10 +376,22 @@ const ItemsListPage = () => {
           </div>
         </div>
         
-        {/* Items Grid/List */}
+        {/* Display error message if there's an error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            <div className="flex">
+              <svg className="w-5 h-5 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zm-1 9a1 1 0 01-1-1v-4a1 1 0 112 0v4a1 1 0 01-1 1z" clipRule="evenodd"></path>
+              </svg>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Display items based on loading state and results */}
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-700"></div>
+            <LoadingSpinner size="xl" color="amber" />
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -417,9 +412,7 @@ const ItemsListPage = () => {
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredItems.map((item) => (
-                <Link to={`/items/${item.id}`} key={item.id} className="block h-full">
-                  <CulturalItemCard item={item} />
-                </Link>
+                <CulturalItemCard key={item.id} item={item} />
               ))}
             </div>
           ) : (
@@ -431,27 +424,13 @@ const ItemsListPage = () => {
           )
         )}
         
-        {/* Pagination - Basic example */}
-        {filteredItems.length > 0 && (
-          <div className="mt-12 flex justify-center">
-            <nav className="inline-flex rounded-md shadow">
-              <a href="#" className="relative inline-flex items-center px-4 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                Previous
-              </a>
-              <a href="#" className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-amber-700 text-sm font-medium text-white">
-                1
-              </a>
-              <a href="#" className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                2
-              </a>
-              <a href="#" className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                3
-              </a>
-              <a href="#" className="relative inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                Next
-              </a>
-            </nav>
-          </div>
+        {/* Pagination */}
+        {!isLoading && filteredItems.length > 0 && (
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
         )}
       </div>
     </div>

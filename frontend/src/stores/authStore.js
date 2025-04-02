@@ -1,184 +1,164 @@
 import { create } from 'zustand';
 import authService from '../services/authService';
 
-const API_URL = import.meta.env.VITE_API_URL;
-
+// Helper function to initialize auth state from localStorage
 const loadInitialState = () => {
-  const token = localStorage.getItem('token') || null;
-  const user = JSON.parse(localStorage.getItem('user')) || null;
-  
-  return { 
-    token, 
-    user,
-    isAuthenticated: !!token && !!user,
-    isLoading: false,
-    error: null
-  };
+  try {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    
+    return {
+      token,
+      user,
+      isAuthenticated: !!token,
+      isLoading: false,
+      error: null
+    };
+  } catch (error) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return {
+      token: null,
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null
+    };
+  }
 };
 
 const useAuthStore = create((set, get) => ({
   ...loadInitialState(),
-  
+
   setToken: (token) => {
     localStorage.setItem('token', token);
-    set(() => ({ token, isAuthenticated: !!token }));
+    set({ token, isAuthenticated: true });
   },
-  
+
   setUser: (user) => {
     localStorage.setItem('user', JSON.stringify(user));
-    set(() => ({ user }));
+    set({ user });
   },
-  
+
   login: async (credentials) => {
-    set({ isLoading: true, error: null });
-    
     try {
+      set({ isLoading: true, error: null });
       const response = await authService.login(credentials);
       
-      if (!response || !response.access_token) {
-        throw new Error('Invalid response from server');
-      }
-
-      let userData = response.user;
+      const { access_token, user } = response;
       
-      if (!userData && response.access_token) {
-        try {
-          userData = await authService.getUserProfile(response.access_token);
-        } catch (profileError) {
-          console.error('Failed to fetch user profile:', profileError);
-          userData = { username: credentials.username || credentials.email };
-        }
+      localStorage.setItem('token', access_token);
+      if (user) {
+        localStorage.setItem('user', JSON.stringify(user));
       }
       
-      localStorage.setItem('token', response.access_token);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      set({ 
-        token: response.access_token, 
-        user: userData,
+      set({
+        token: access_token,
+        user,
         isAuthenticated: true,
-        isLoading: false 
+        isLoading: false,
       });
       
-      return userData;
+      return user;
     } catch (error) {
-      console.error('Login error:', error);
-      set({ 
-        error: error.message || 'Authentication failed', 
-        isLoading: false 
-      });
+      set({ error: error.message || 'Authentication failed', isLoading: false });
       throw error;
     }
   },
-  
+
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    
-    set({
-      token: null,
-      user: null,
-      isAuthenticated: false,
+    authService.logout();
+    set({ 
+      token: null, 
+      user: null, 
+      isAuthenticated: false, 
+      error: null 
     });
   },
-  
+
   register: async (userData) => {
-    set({ isLoading: true, error: null });
-    
     try {
-      const formattedData = {
-        username: userData.username,
-        email: userData.email,
-        password: userData.password,
-        full_name: userData.full_name || userData.username
-      };
-      
-      const response = await authService.register(formattedData);
-      set({ isLoading: false });
-      return response;
-    } catch (error) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Registration failed';
+      set({ isLoading: true, error: null });
+      const response = await authService.register(userData);
+      const { access_token, user } = response;
       set({ 
-        error: errorMessage, 
+        token: access_token, 
+        user, 
+        isAuthenticated: true, 
+        isLoading: false 
+      });
+      return user;
+    } catch (error) {
+      set({ 
+        error: error.message || 'Registration failed', 
         isLoading: false 
       });
       throw error;
     }
   },
-  
-  fetchUser: async () => {
-    const { token, logout, setUser } = get();
-    if (!token) return;
-    
-    set({ isLoading: true });
-    
-    try {
-      const response = await fetch(`${API_URL}/general/me`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
 
-      if (response.status === 200) {
-        const userData = await response.json();
-        setUser(userData);
-      } else if (response.status === 401) {
-        // Token expired or invalid
-        logout();
-      } else {
-        throw new Error('Failed to fetch user profile');
-      }
+  fetchUser: async () => {
+    try {
+      set({ isLoading: true, error: null });
+      const user = await authService.getCurrentUser();
+      set({ user, isAuthenticated: true, isLoading: false });
+      return user;
     } catch (error) {
-      set({ 
-        error: error.message || 'Failed to fetch user profile',
-        isLoading: false 
-      });
-      console.error('Error fetching user profile:', error);
-    } finally {
-      set({ isLoading: false });
+      const errorMessage = error.message || 'Failed to fetch user';
+      console.error('Error fetching user:', error);
+      set({ error: errorMessage, isLoading: false });
+      throw new Error(errorMessage);
     }
   },
-  
-  updateProfile: async (profileData) => {
-    set({ isLoading: true, error: null });
-    
+
+  updateProfile: async (userData) => {
     try {
-      const response = await authService.updateUserProfile(profileData);
-      const updatedUser = { ...get().user, ...response };
-      
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      set({ 
-        user: updatedUser,
-        isLoading: false 
-      });
-      
+      set({ isLoading: true, error: null });
+      const updatedUser = await authService.updateProfile(userData);
+      set({ user: updatedUser, isLoading: false });
       return updatedUser;
     } catch (error) {
-      set({ 
-        error: error.message || 'Failed to update profile', 
-        isLoading: false 
-      });
+      const errorMessage = error.message || 'Failed to update profile';
+      set({ error: errorMessage, isLoading: false });
+      throw new Error(errorMessage);
+    }
+  },
+
+  changePassword: async ({ currentPassword, newPassword }) => {
+    try {
+      set({ isLoading: true, error: null });
+      await authService.changePassword({ currentPassword, newPassword });
+      set({ isLoading: false });
+      return true;
+    } catch (error) {
+      set({ error: error.message || 'Failed to change password', isLoading: false });
+      throw error;
+    }
+  },
+
+  requestPasswordReset: async (email) => {
+    try {
+      set({ isLoading: true, error: null });
+      await authService.requestPasswordReset(email);
+      set({ isLoading: false });
+      return true;
+    } catch (error) {
+      set({ error: error.message || 'Failed to request password reset', isLoading: false });
       throw error;
     }
   },
   
-  changePassword: async (passwordData) => {
-    set({ isLoading: true, error: null });
-    
+  resetPassword: async (token, newPassword) => {
     try {
-      const response = await authService.changePassword(passwordData);
+      set({ isLoading: true, error: null });
+      await authService.resetPassword(token, newPassword);
       set({ isLoading: false });
-      return response;
+      return true;
     } catch (error) {
-      set({ 
-        error: error.message || 'Failed to change password', 
-        isLoading: false 
-      });
+      set({ error: error.message || 'Failed to reset password', isLoading: false });
       throw error;
     }
-  },
+  }
 }));
 
 export default useAuthStore;

@@ -13,8 +13,8 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Make tokenUrl consistent with our API structure
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token", auto_error=False)
+# Fix tokenUrl to match actual API structure
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DEFAULT_ENTROPY = 32
@@ -56,7 +56,7 @@ def verify_token_access(token_str: str, db: Session) -> Token:
             select(Token).where(
                 Token.token == token_str,
                 Token.expires_at > datetime.now(UTC),
-                Token.created >= datetime.now(UTC) - max_age,
+                Token.created_at >= datetime.now(UTC) - max_age,  # Fixed attribute name
                 Token.is_revoked == False,
             )
         )
@@ -64,6 +64,8 @@ def verify_token_access(token_str: str, db: Session) -> Token:
         .first()
     )
     if not token:
+        # Log token validation failure for debugging
+        print(f"Token validation failed for token: {token_str}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalid or expired",

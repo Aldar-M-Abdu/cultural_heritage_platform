@@ -1,12 +1,17 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
 
 from app.api.v1.core.models import CulturalItem, Tag, Media, Comment
 from app.api.v1.core.schemas import CulturalItemCreate, CulturalItemUpdate, MediaCreate
 
 
-def get_cultural_items(db: Session, skip: int = 0, limit: int = 100):
+def get_cultural_items(db: Session, skip: int = 0, limit: int = 12):
+    """
+    Get paginated cultural items from the database.
+    """
+    # Avoid querying is_featured column which doesn't exist in the database
     return db.query(CulturalItem).offset(skip).limit(limit).all()
 
 
@@ -84,6 +89,14 @@ def delete_cultural_item(db: Session, cultural_item_id: UUID):
 
 
 def create_media(db: Session, media: MediaCreate):
+    # Check if cultural item exists
+    cultural_item = get_cultural_item(db, media.cultural_item_id)
+    if not cultural_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cultural item with ID {media.cultural_item_id} not found"
+        )
+        
     db_media = Media(
         url=media.url,
         media_type=media.media_type,
@@ -103,6 +116,9 @@ def get_all_tags(db: Session, skip: int = 0, limit: int = 100):
 
 
 def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 100):
+    if not query:
+        return []
+        
     search = f"%{query}%"
     return db.query(CulturalItem).filter(
         CulturalItem.title.ilike(search) | CulturalItem.description.ilike(search)
@@ -110,22 +126,59 @@ def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 1
 
 
 def get_cultural_items_by_tag(db: Session, tag_name: str, skip: int = 0, limit: int = 100):
+    if not tag_name:
+        return []
+        
     return db.query(CulturalItem).join(CulturalItem.tags).filter(
         Tag.name == tag_name
     ).offset(skip).limit(limit).all()
 
 
 def get_cultural_items_by_region(db: Session, region: str, skip: int = 0, limit: int = 100):
+    if not region:
+        return []
+        
     return db.query(CulturalItem).filter(
         CulturalItem.region == region
     ).offset(skip).limit(limit).all()
 
 
 def get_cultural_items_by_time_period(db: Session, time_period: str, skip: int = 0, limit: int = 100):
+    if not time_period:
+        return []
+        
     return db.query(CulturalItem).filter(
         CulturalItem.time_period == time_period
     ).offset(skip).limit(limit).all()
 
 
 def get_comments(db: Session, cultural_item_id: UUID):
+    if not cultural_item_id:
+        return []
+        
     return db.query(Comment).filter(Comment.cultural_item_id == cultural_item_id).all()
+
+
+def get_featured_cultural_items(db: Session, skip: int = 0, limit: int = 10) -> List[CulturalItem]:
+    """
+    Retrieves featured cultural items from the database.
+    
+    Since the is_featured column doesn't exist in the database, we'll return
+    the most recent items instead.
+    
+    Args:
+        db: Database session
+        skip: Number of items to skip (for pagination)
+        limit: Maximum number of items to return
+    
+    Returns:
+        List of most recent cultural items
+    """
+    # Using created_at to sort by most recent instead of filtering by is_featured
+    featured_items = db.query(CulturalItem)\
+                      .order_by(CulturalItem.created_at.desc())\
+                      .offset(skip)\
+                      .limit(limit)\
+                      .all()
+    
+    return featured_items

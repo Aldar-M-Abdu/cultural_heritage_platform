@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 
-const CommentList = ({ comments = [], currentUser }) => {
+const CommentList = ({ comments = [], currentUser, onDelete, onReply }) => {
   const [expandedReplies, setExpandedReplies] = useState({});
+  const [replyText, setReplyText] = useState({});
+  const [showReplyForm, setShowReplyForm] = useState({});
+  const [isSubmittingReply, setIsSubmittingReply] = useState({});
 
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -11,6 +14,36 @@ const CommentList = ({ comments = [], currentUser }) => {
 
   const toggleReplies = (id) => {
     setExpandedReplies(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleReplyForm = (id) => {
+    setShowReplyForm(prev => ({ ...prev, [id]: !prev[id] }));
+    if (!showReplyForm[id]) {
+      setReplyText(prev => ({ ...prev, [id]: '' }));
+    }
+  };
+
+  const handleReplyChange = (id, value) => {
+    setReplyText(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleReplySubmit = async (commentId) => {
+    if (!replyText[commentId]?.trim()) {
+      return;
+    }
+
+    setIsSubmittingReply(prev => ({ ...prev, [commentId]: true }));
+    
+    try {
+      const success = await onReply(commentId, replyText[commentId]);
+      if (success) {
+        // Clear the form and hide it
+        setReplyText(prev => ({ ...prev, [commentId]: '' }));
+        setShowReplyForm(prev => ({ ...prev, [commentId]: false }));
+      }
+    } finally {
+      setIsSubmittingReply(prev => ({ ...prev, [commentId]: false }));
+    }
   };
 
   if (!comments.length) {
@@ -53,6 +86,7 @@ const CommentList = ({ comments = [], currentUser }) => {
                       </svg>
                     </button>
                     <button
+                      onClick={() => onDelete && onDelete(comment.id)}
                       className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-gray-100"
                       title="Delete comment"
                     >
@@ -65,11 +99,14 @@ const CommentList = ({ comments = [], currentUser }) => {
               </div>
               <p className="mt-3 text-gray-700 whitespace-pre-wrap bg-white p-3 rounded-lg border border-gray-100 shadow-sm">{comment.text}</p>
               <div className="mt-3 flex space-x-4">
-                <button className="text-xs font-medium text-gray-500 hover:text-blue-600 flex items-center transition-colors duration-200 py-1 px-2 rounded-full hover:bg-blue-50">
+                <button 
+                  onClick={() => toggleReplyForm(comment.id)} 
+                  className="text-xs font-medium text-gray-500 hover:text-blue-600 flex items-center transition-colors duration-200 py-1 px-2 rounded-full hover:bg-blue-50"
+                >
                   <svg className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  Reply
+                  {showReplyForm[comment.id] ? 'Cancel' : 'Reply'}
                 </button>
                 {comment.replies?.length > 0 && (
                   <button
@@ -83,9 +120,48 @@ const CommentList = ({ comments = [], currentUser }) => {
                   </button>
                 )}
               </div>
-              {expandedReplies[comment.id] && comment.replies.length > 0 && (
+
+              {/* Reply form */}
+              {showReplyForm[comment.id] && (
+                <div className="mt-4 pl-4 border-l-2 border-indigo-100">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <textarea
+                      className="w-full border rounded-lg shadow-sm p-2 text-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                      rows="2"
+                      placeholder="Write a reply..."
+                      value={replyText[comment.id] || ''}
+                      onChange={(e) => handleReplyChange(comment.id, e.target.value)}
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={() => handleReplySubmit(comment.id)}
+                        disabled={isSubmittingReply[comment.id] || !replyText[comment.id]?.trim()}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-all flex items-center"
+                      >
+                        {isSubmittingReply[comment.id] ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                            Sending...
+                          </>
+                        ) : 'Post Reply'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Replies */}
+              {expandedReplies[comment.id] && comment.replies?.length > 0 && (
                 <div className="mt-4 pl-6 border-l-2 border-indigo-200">
-                  <CommentList comments={comment.replies} currentUser={currentUser} />
+                  <CommentList 
+                    comments={comment.replies}
+                    currentUser={currentUser} 
+                    onDelete={onDelete}
+                    onReply={onReply}
+                  />
                 </div>
               )}
             </div>

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import MarkerClusterGroup from "react-leaflet-cluster";
+import itemsService from '../services/itemsService';
 
 // Custom marker icon
 const defaultIcon = new L.Icon({
@@ -18,54 +19,89 @@ L.Marker.prototype.options.icon = defaultIcon;
 
 const MapView = () => {
   const [activeItem, setActiveItem] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  const items = [
-    {
-      id: 1,
-      name: "Viking Burial Site",
-      latitude: 59.3293,
-      longitude: 18.0686,
-      description: "Important Viking burial site containing numerous artifacts",
-      period: "800-1050 CE",
-      category: "Archaeological Site"
-    },
-    {
-      id: 2,
-      name: "Ancient Greek Temple",
-      latitude: 37.9715,
-      longitude: 23.7267,
-      description: "Ruins of a temple dedicated to Athena",
-      period: "447-432 BCE",
-      category: "Temple"
-    },
-    {
-      id: 3,
-      name: "Maya Pyramid",
-      latitude: 20.6843,
-      longitude: -88.5678,
-      description: "Well-preserved Maya pyramid complex",
-      period: "600-900 CE",
-      category: "Archaeological Site"
-    },
-    {
-      id: 4,
-      name: "Tang Dynasty Palace",
-      latitude: 34.3416,
-      longitude: 108.9398,
-      description: "Remains of Tang Dynasty imperial palace",
-      period: "618-907 CE",
-      category: "Palace"
-    },
-    {
-      id: 5,
-      name: "Medieval Monastery",
-      latitude: 48.8566,
-      longitude: 2.3522,
-      description: "12th century monastery with preserved manuscripts",
-      period: "1100-1200 CE",
-      category: "Religious Site"
-    }
-  ];
+  // Fetch real items from the API
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setLoading(true);
+        const response = await itemsService.getItems(); // Updated to use the corrected endpoint
+        
+        // Transform the data to include lat/long if needed
+        // This is a placeholder - you may need to modify depending on your API response
+        const mappedItems = response.map(item => ({
+          id: item.id,
+          name: item.title,
+          latitude: parseFloat(item.latitude || 0),
+          longitude: parseFloat(item.longitude || 0),
+          description: item.description,
+          period: item.time_period,
+          category: item.region // Using region as category for now
+        }));
+        
+        setItems(mappedItems);
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to fetch items:", err);
+        setError("Failed to load items. Please try again later.");
+        setLoading(false);
+        
+        // Fallback to sample data if API fails
+        setItems([
+          {
+            id: 1,
+            name: "Viking Burial Site",
+            latitude: 59.3293,
+            longitude: 18.0686,
+            description: "Important Viking burial site containing numerous artifacts",
+            period: "800-1050 CE",
+            category: "Archaeological Site"
+          },
+          {
+            id: 2,
+            name: "Ancient Greek Temple",
+            latitude: 37.9715,
+            longitude: 23.7267,
+            description: "Ruins of a temple dedicated to Athena",
+            period: "447-432 BCE",
+            category: "Temple"
+          },
+          {
+            id: 3,
+            name: "Maya Pyramid",
+            latitude: 20.6843,
+            longitude: -88.5678,
+            description: "Well-preserved Maya pyramid complex",
+            period: "600-900 CE",
+            category: "Archaeological Site"
+          },
+          {
+            id: 4,
+            name: "Tang Dynasty Palace",
+            latitude: 34.3416,
+            longitude: 108.9398,
+            description: "Remains of Tang Dynasty imperial palace",
+            period: "618-907 CE",
+            category: "Palace"
+          },
+          {
+            id: 5,
+            name: "Medieval Monastery",
+            latitude: 48.8566,
+            longitude: 2.3522,
+            description: "12th century monastery with preserved manuscripts",
+            period: "1100-1200 CE",
+            category: "Religious Site"
+          }
+        ]);
+      }
+    };
+    
+    fetchItems();
+  }, []);
 
   const handleMarkerClick = (item) => {
     setActiveItem(item);

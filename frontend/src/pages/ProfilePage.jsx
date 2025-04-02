@@ -1,447 +1,687 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 import { itemsService } from '../services/itemsService';
 import CulturalItemCard from '../components/CulturalItemCard';
 
 const ProfilePage = () => {
-  const navigate = useNavigate();
-  const { user, updateProfile, changePassword } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('profile');
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || null);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
-  const [passwordChangeError, setPasswordChangeError] = useState(null);
-  const [userContributions, setUserContributions] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
-    defaultValues: {
-      email: user?.email || '',
-      bio: user?.bio || '',
-      organization: user?.organization || '',
-    },
-  });
-
-  const { register: registerPassword, handleSubmit: handleSubmitPassword, formState: { errors: passwordErrors }, reset: resetPasswordForm } = useForm({
-    defaultValues: {
-      current_password: '',
-      new_password: '',
-      confirm_password: '',
-    },
-  });
-
-  // Fetch user contributions
-  useEffect(() => {
-    if (user?.id) {
-      fetchUserContributions();
-    }
-  }, [user?.id]);
-
-  const fetchUserContributions = async () => {
-    setIsLoading(true);
-    try {
-      // This would be replaced with an actual API call in a real implementation
-      // const contributions = await itemsService.getUserContributions(user.id);
-      const mockContributions = []; // Mock data - replace with actual API call
-      setUserContributions(mockContributions);
-    } catch (error) {
-      console.error('Failed to fetch contributions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleProfileSubmit = async (data) => {
-    try {
-      // Update profile information
-      await updateProfile({
-        email: data.email,
-        bio: data.bio,
-        organization: data.organization
-      });
-      
-      // Show success notification or handle successful update
-      // For example:
-      alert('Profile updated successfully');
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      // Handle error, show error message
-    }
-  };
+  const { user, isLoading, updateProfile, changePassword, error } = useAuthStore();
   
-  // Handle password change
-  const handlePasswordChange = async (data) => {
-    try {
-      if (data.new_password !== data.confirm_password) {
-        setPasswordChangeError('Passwords do not match');
-        return;
-      }
-      
-      await changePassword({
-        currentPassword: data.current_password,
-        newPassword: data.new_password
+  // User form states
+  const [profileForm, setProfileForm] = useState({
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+    bio: '',
+  });
+  
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  
+  // UI states
+  const [activeTab, setActiveTab] = useState('profile');
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [generalError, setGeneralError] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  
+  // User items
+  const [userItems, setUserItems] = useState([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+
+  // Initialize form with user data when it loads
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        username: user.username || '',
+        email: user.email || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        bio: user.bio || '',
       });
       
-      resetPasswordForm();
-      setPasswordChangeSuccess(true);
-      setPasswordChangeError(null);
-      setIsPasswordModalOpen(false);
-      
-      // Reset success message after 3 seconds
-      setTimeout(() => {
-        setPasswordChangeSuccess(false);
-      }, 3000);
-    } catch (error) {
-      setPasswordChangeError(error.message || 'Failed to change password');
+      // Fetch user's items
+      fetchUserItems();
+    }
+  }, [user]);
+  
+  const fetchUserItems = async () => {
+    if (!user?.id) return;
+    
+    setItemsLoading(true);
+    try {
+      const response = await itemsService.getItems({ 
+        user_id: user.id,
+        limit: 6 
+      });
+      setUserItems(response.items || response || []);
+    } catch (err) {
+      console.error('Failed to fetch user items:', err);
+    } finally {
+      setItemsLoading(false);
     }
   };
 
-  const handleAvatarChange = (event) => {
-    const file = event.currentTarget.files[0];
-    if (file) {
-      setValue('avatar', file);
-      
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+  // Handle form changes
+  const handleProfileChange = (e) => {
+    const { name, value } = e.target;
+    setProfileForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear success message and errors on change
+    setProfileSuccess(false);
+    setErrors(prev => ({
+      ...prev,
+      [name]: '',
+    }));
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear success message and errors on change
+    setPasswordSuccess(false);
+    setErrors(prev => ({
+      ...prev,
+      [name]: '',
+    }));
+  };
+
+  // Form validation
+  const validateProfileForm = () => {
+    const newErrors = {};
+    
+    if (!profileForm.username) {
+      newErrors.username = 'Username is required';
+    }
+    
+    if (!profileForm.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(profileForm.email)) {
+      newErrors.email = 'Email is invalid';
+    }
+    
+    if (!profileForm.first_name) {
+      newErrors.first_name = 'First name is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validatePasswordForm = () => {
+    const newErrors = {};
+    
+    if (!passwordForm.currentPassword) {
+      newErrors.currentPassword = 'Current password is required';
+    }
+    
+    if (!passwordForm.newPassword) {
+      newErrors.newPassword = 'New password is required';
+    } else if (passwordForm.newPassword.length < 8) {
+      newErrors.newPassword = 'Password must be at least 8 characters';
+    }
+    
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Form submission handlers
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setGeneralError('');
+    setProfileSuccess(false);
+    
+    if (!validateProfileForm()) {
+      return;
+    }
+    
+    setIsUpdating(true);
+    try {
+      await updateProfile(profileForm);
+      setProfileSuccess(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setGeneralError(err.message || 'Failed to update profile');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  if (!user) {
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setGeneralError('');
+    setPasswordSuccess(false);
+    
+    if (!validatePasswordForm()) {
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    try {
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      
+      // Reset form on success
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      
+      setPasswordSuccess(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setGeneralError(err.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">You need to be logged in to view your profile</h2>
-          <button 
-            onClick={() => navigate('/login')}
-            className="btn bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-          >
-            Log In
-          </button>
-        </div>
+      <div className="flex justify-center items-center min-h-screen">
+        <LoadingSpinner size="lg" color="indigo" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h1>
-      
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`${
-              activeTab === 'profile'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium`}
-          >
-            Profile Information
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('contributions')}
-            className={`${
-              activeTab === 'contributions'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium`}
-          >
-            My Contributions
-          </button>
-        </nav>
-      </div>
-      
-      {/* Tab content */}
-      {activeTab === 'profile' && (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <form onSubmit={handleSubmit(handleProfileSubmit)} className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              {/* Avatar */}
-              <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row items-center mb-6">
-                <div className="relative h-24 w-24 rounded-full overflow-hidden bg-gray-100 mb-4 sm:mb-0 sm:mr-6">
-                  {avatarPreview ? (
-                    <img 
-                      src={avatarPreview} 
-                      alt={user.username} 
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center bg-primary-100 text-primary-800 text-3xl font-medium">
-                      {user.username?.charAt(0) || '?'}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="avatar" className="block text-sm font-medium text-gray-700 mb-2">
-                    Profile Picture
-                  </label>
-                  <input
-                    id="avatar"
-                    name="avatar"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
-                  <div className="flex space-x-2">
-                    <label
-                      htmlFor="avatar"
-                      className="btn btn-secondary btn-sm cursor-pointer"
-                    >
-                      Change Photo
-                    </label>
-                    {avatarPreview && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAvatarPreview(null);
-                          setValue('avatar', null);
-                        }}
-                        className="btn btn-danger btn-sm"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    JPG, PNG or GIF. Max 2MB.
-                  </p>
-                </div>
-              </div>
-              
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  {...register('email', { required: 'Email is required' })}
-                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  placeholder="your.email@example.com"
-                />
-                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
-              </div>
-              
-              {/* Organization */}
-              <div>
-                <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-1">
-                  Organization (Optional)
-                </label>
-                <input
-                  id="organization"
-                  {...register('organization')}
-                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  placeholder="Your organization or institution"
-                />
-                {errors.organization && <p className="mt-1 text-sm text-red-600">{errors.organization.message}</p>}
-              </div>
-              
-              {/* Password Change Button */}
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  onClick={() => setIsPasswordModalOpen(true)}
-                  className="text-primary-600 hover:text-primary-800 font-medium"
-                >
-                  Change Password
-                </button>
-              </div>
-              
-              {/* Bio */}
-              <div className="col-span-1 md:col-span-2">
-                <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
-                  Bio (Optional)
-                </label>
-                <textarea
-                  id="bio"
-                  {...register('bio')}
-                  rows="4"
-                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  placeholder="Tell us a bit about yourself"
-                />
-                {errors.bio && <p className="mt-1 text-sm text-red-600">{errors.bio.message}</p>}
-              </div>
+    <div className="bg-gray-50 min-h-screen">
+      <div className="bg-indigo-700 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="flex flex-col md:flex-row items-center">
+            <div className="h-24 w-24 rounded-full bg-indigo-800 flex justify-center items-center text-3xl font-bold mb-4 md:mb-0 md:mr-6">
+              {user?.first_name?.charAt(0) || user?.username?.charAt(0) || 'U'}
             </div>
-            
-            <div className="mt-8 flex justify-end">
-              <button
-                type="submit"
-                className="btn btn-primary"
-              >
-                Save Changes
-              </button>
+            <div>
+              <h1 className="text-3xl font-bold">{user?.first_name ? `${user.first_name} ${user.last_name || ''}` : user?.username || 'User'}</h1>
+              <p className="text-indigo-200">Member since {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'unknown'}</p>
             </div>
-          </form>
-        </div>
-      )}
-      
-      {activeTab === 'contributions' && (
-        <div>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">My Cultural Heritage Contributions</h2>
-            <a href="/items/new" className="btn btn-primary">
-              Add New Item
-            </a>
           </div>
-          
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-            </div>
-          ) : !userContributions.length ? (
-            <div className="bg-white shadow rounded-lg p-6 text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No contributions yet</h3>
-              <p className="text-gray-500 mb-4">
-                Start sharing cultural heritage items with the community.
-              </p>
-              <a href="/items/new" className="btn btn-primary">
-                Add Your First Item
-              </a>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {userContributions.map(item => (
-                <div key={item.id} className="relative">
-                  <CulturalItemCard item={item} />
-                  <div className="absolute top-2 left-2 flex space-x-2">
-                    <a
-                      href={`/items/${item.id}/edit`}
-                      className="bg-white p-2 rounded-full shadow hover:bg-gray-100"
-                      title="Edit"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </a>
-                    <button
-                      onClick={async () => {
-                        if (window.confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
-                          try {
-                            // Corrected syntax for try-catch block
-                            await itemsService.deleteItem(item.id);
-                            fetchUserContributions();
-                          } catch (error) {
-                            console.error(error);
-                            alert('Failed to delete item. Please try again.');
-                          }
-                        }
-                      }}
-                      className="bg-white p-2 rounded-full shadow hover:bg-gray-100"
-                      title="Delete"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      )}
-      
-      {/* Password Change Modal */}
-      {isPasswordModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Change Password</h3>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* Profile tabs */}
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
               <button
-                onClick={() => {
-                  setIsPasswordModalOpen(false);
-                  setPasswordChangeSuccess(false);
-                  setPasswordChangeError(null);
-                }}
-                className="text-gray-400 hover:text-gray-500"
+                onClick={() => setActiveTab('profile')}
+                className={`${
+                  activeTab === 'profile'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-center`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                Profile Information
               </button>
-            </div>
-            
-            {passwordChangeSuccess ? (
-              <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-                Password changed successfully!
-              </div>
-            ) : (
-              <form onSubmit={handleSubmitPassword(handlePasswordSubmit)}>
-                {passwordChangeError && (
-                  <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-                    {passwordChangeError}
+              <button
+                onClick={() => setActiveTab('security')}
+                className={`${
+                  activeTab === 'security'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-center`}
+              >
+                Password & Security
+              </button>
+              <button
+                onClick={() => setActiveTab('contributions')}
+                className={`${
+                  activeTab === 'contributions'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-center`}
+              >
+                Your Contributions
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab content */}
+          <div className="p-6">
+            {/* Profile information tab */}
+            {activeTab === 'profile' && (
+              <div>
+                <h2 className="text-xl font-medium text-gray-900 mb-6">Edit Your Profile</h2>
+                
+                {profileSuccess && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-6">
+                    <p>Your profile has been updated successfully!</p>
                   </div>
                 )}
                 
-                <div className="mb-4">
-                  <label htmlFor="current_password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Password
-                  </label>
-                  <input
-                    id="current_password"
-                    {...registerPassword('current_password', { required: 'Current password is required' })}
-                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  />
-                  {passwordErrors.current_password && <p className="mt-1 text-sm text-red-600">{passwordErrors.current_password.message}</p>}
-                </div>
+                {generalError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+                    <p>{generalError}</p>
+                  </div>
+                )}
                 
-                <div className="mb-4">
-                  <label htmlFor="new_password" className="block text-sm font-medium text-gray-700 mb-1">
-                    New Password
-                  </label>
-                  <input
-                    id="new_password"
-                    {...registerPassword('new_password', { required: 'New password is required' })}
-                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  />
-                  {passwordErrors.new_password && <p className="mt-1 text-sm text-red-600">{passwordErrors.new_password.message}</p>}
-                </div>
+                <form onSubmit={handleProfileSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        value={profileForm.username}
+                        onChange={handleProfileChange}
+                        className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                          errors.username 
+                            ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                            : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                        }`}
+                      />
+                      {errors.username && (
+                        <p className="mt-1 text-sm text-red-600">{errors.username}</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={profileForm.email}
+                        onChange={handleProfileChange}
+                        className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                          errors.email 
+                            ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                            : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                        }`}
+                      />
+                      {errors.email && (
+                        <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="first_name" className="block text-sm font-medium text-gray-700">
+                        First Name
+                      </label>
+                      <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        value={profileForm.first_name}
+                        onChange={handleProfileChange}
+                        className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                          errors.first_name 
+                            ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                            : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                        }`}
+                      />
+                      {errors.first_name && (
+                        <p className="mt-1 text-sm text-red-600">{errors.first_name}</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="last_name" className="block text-sm font-medium text-gray-700">
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        value={profileForm.last_name}
+                        onChange={handleProfileChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="bio" className="block text-sm font-medium text-gray-700">
+                      Bio
+                    </label>
+                    <div className="mt-1">
+                      <textarea
+                        id="bio"
+                        name="bio"
+                        rows={4}
+                        value={profileForm.bio}
+                        onChange={handleProfileChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="Tell us about yourself..."
+                      />
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Brief description for your profile. URLs are hyperlinked.
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isUpdating}
+                      className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                    >
+                      {isUpdating ? (
+                        <>
+                          <LoadingSpinner size="sm" color="white" className="mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+            
+            {/* Security tab */}
+            {activeTab === 'security' && (
+              <div>
+                <h2 className="text-xl font-medium text-gray-900 mb-6">Change Your Password</h2>
                 
-                <div className="mb-6">
-                  <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm New Password
-                  </label>
-                  <input
-                    id="confirm_password"
-                    {...registerPassword('confirm_password', { required: 'Passwords must match' })}
-                    className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  />
-                  {passwordErrors.confirm_password && <p className="mt-1 text-sm text-red-600">{passwordErrors.confirm_password.message}</p>}
-                </div>
+                {passwordSuccess && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-6">
+                    <p>Your password has been updated successfully!</p>
+                  </div>
+                )}
                 
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="btn btn-secondary mr-3"
+                {generalError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+                    <p>{generalError}</p>
+                  </div>
+                )}
+                
+                <form onSubmit={handlePasswordSubmit} className="space-y-6 max-w-md">
+                  <div>
+                    <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      id="currentPassword"
+                      name="currentPassword"
+                      value={passwordForm.currentPassword}
+                      onChange={handlePasswordChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                        errors.currentPassword 
+                          ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                          : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                      }`}
+                    />
+                    {errors.currentPassword && (
+                      <p className="mt-1 text-sm text-red-600">{errors.currentPassword}</p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      id="newPassword"
+                      name="newPassword"
+                      value={passwordForm.newPassword}
+                      onChange={handlePasswordChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                        errors.newPassword 
+                          ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                          : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                      }`}
+                    />
+                    {errors.newPassword && (
+                      <p className="mt-1 text-sm text-red-600">{errors.newPassword}</p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={passwordForm.confirmPassword}
+                      onChange={handlePasswordChange}
+                      className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
+                        errors.confirmPassword 
+                          ? 'border-red-300 focus:border-red-300 focus:ring-red-300' 
+                          : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                      }`}
+                    />
+                    {errors.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+                    )}
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isChangingPassword}
+                      className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                    >
+                      {isChangingPassword ? (
+                        <>
+                          <LoadingSpinner size="sm" color="white" className="mr-2" />
+                          Updating...
+                        </>
+                      ) : (
+                        'Change Password'
+                      )}
+                    </button>
+                  </div>
+                </form>
+                
+                <div className="mt-12 border-t border-gray-200 pt-8">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Account Security</h3>
+                  
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-yellow-800">Protection Reminder</h3>
+                        <div className="mt-2 text-sm text-yellow-700">
+                          <p>For optimal account security, we recommend:</p>
+                          <ul className="list-disc pl-5 mt-1">
+                            <li>Using a unique password for this account</li>
+                            <li>Including a mix of letters, numbers, and symbols</li>
+                            <li>Avoiding personal information in your password</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="border border-gray-200 rounded-lg p-4 flex justify-between items-center bg-gray-50">
+                      <div>
+                        <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
+                        <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
+                      </div>
+                      <button 
+                        className="px-3 py-2 rounded-md text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                      >
+                        Set Up
+                      </button>
+                    </div>
+                    
+                    <div className="border border-gray-200 rounded-lg p-4 flex justify-between items-center bg-gray-50">
+                      <div>
+                        <h4 className="font-medium text-gray-900">Security Log</h4>
+                        <p className="text-sm text-gray-500">View your account security activity</p>
+                      </div>
+                      <button 
+                        className="px-3 py-2 rounded-md text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      >
+                        View Log
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Contributions tab */}
+            {activeTab === 'contributions' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-900">Your Contributions</h2>
+                  <Link
+                    to="/items/new"
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                  >
-                    Change Password
-                  </button>
+                    <svg className="mr-2 -ml-1 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                    </svg>
+                    Add New Item
+                  </Link>
                 </div>
-              </form>
+                
+                {itemsLoading ? (
+                  <div className="flex justify-center items-center h-64">
+                    <LoadingSpinner size="lg" />
+                  </div>
+                ) : userItems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {userItems.map(item => (
+                      <CulturalItemCard key={item.id} item={item} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    <h3 className="mt-2 text-xl font-medium text-gray-900">No contributions yet</h3>
+                    <p className="mt-1 text-sm text-gray-500">You haven't added any items to the collection yet.</p>
+                    <div className="mt-6">
+                      <Link
+                        to="/items/new"
+                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Your First Item
+                      </Link>
+                    </div>
+                  </div>
+                )}
+                
+                {userItems.length > 0 && (
+                  <div className="mt-8 text-center">
+                    <Link
+                      to="/items"
+                      className="text-indigo-600 font-medium hover:text-indigo-800"
+                    >
+                      View all your items
+                    </Link>
+                  </div>
+                )}
+                
+                <div className="mt-12 pt-8 border-t border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Activity Statistics</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                      <div className="p-5">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 bg-indigo-100 rounded-md p-3">
+                            <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2-2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          </div>
+                          <div className="ml-5 w-0 flex-1">
+                            <dl>
+                              <dt className="text-sm font-medium text-gray-500 truncate">Total Items</dt>
+                              <dd>
+                                <div className="text-lg font-medium text-gray-900">{userItems.length}</div>
+                              </dd>
+                            </dl>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                      <div className="p-5">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 bg-indigo-100 rounded-md p-3">
+                            <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                          <div className="ml-5 w-0 flex-1">
+                            <dl>
+                              <dt className="text-sm font-medium text-gray-500 truncate">Total Views</dt>
+                              <dd>
+                                <div className="text-lg font-medium text-gray-900">
+                                  {userItems.reduce((sum, item) => sum + (item.view_count || 0), 0)}
+                                </div>
+                              </dd>
+                            </dl>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                      <div className="p-5">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 bg-indigo-100 rounded-md p-3">
+                            <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                          </div>
+                          <div className="ml-5 w-0 flex-1">
+                            <dl>
+                              <dt className="text-sm font-medium text-gray-500 truncate">Comments</dt>
+                              <dd>
+                                <div className="text-lg font-medium text-gray-900">
+                                  {userItems.reduce((sum, item) => sum + (item.comments_count || 0), 0)}
+                                </div>
+                              </dd>
+                            </dl>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
