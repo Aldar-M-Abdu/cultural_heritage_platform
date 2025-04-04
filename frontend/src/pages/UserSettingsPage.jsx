@@ -1,87 +1,99 @@
-import React, { useState, useEffect } from 'react';
-import { UserIcon, BellIcon, LockClosedIcon, CogIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { UserIcon, LockClosedIcon, BellIcon } from '@heroicons/react/24/outline';
 import useAuthStore from '../stores/authStore';
 
 const UserSettingsPage = () => {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, updateProfile, changePassword, error: authError } = useAuthStore();
+  
+  // State management
   const [activeTab, setActiveTab] = useState('account');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState({ message: '', type: '' });
+  const [errors, setErrors] = useState({});
+  
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     currentPassword: '',
     newPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
     smsNotifications: false,
     pushNotifications: true,
-    weeklyDigest: true
+    weeklyDigest: false,
   });
-  const [notificationMessage, setNotificationMessage] = useState({ type: '', message: '' });
-
-  const { user, updateProfile, changePassword } = useAuthStore();
-
-  // Load user data on component mount
+  
+  // Load user data when component mounts
   useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
     if (user) {
-      setFormData(prevState => ({
-        ...prevState,
+      setFormData(prevData => ({
+        ...prevData,
         username: user.username || '',
-        email: user.email || ''
+        email: user.email || '',
       }));
     }
-  }, [user]);
+  }, [user, isAuthenticated, navigate]);
   
+  // Handle form field changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
+    setFormData(prevData => ({
+      ...prevData,
       [name]: value
     }));
-    // Clear errors when user types
+    
+    // Clear errors when field is modified
     if (errors[name]) {
-      setErrors(prevState => ({
-        ...prevState,
-        [name]: ''
-      }));
+      setErrors(prevErrors => ({ ...prevErrors, [name]: '' }));
     }
   };
-
+  
+  // Handle notification settings changes
   const handleNotificationChange = (e) => {
     const { name, checked } = e.target;
-    setNotificationSettings(prevState => ({
-      ...prevState,
+    setNotificationSettings(prevSettings => ({
+      ...prevSettings,
       [name]: checked
     }));
   };
-
+  
+  // Form validation
   const validateForm = () => {
     const newErrors = {};
     
-    // Validate account info
     if (activeTab === 'account') {
       if (!formData.username.trim()) {
         newErrors.username = 'Username is required';
       }
+      
       if (!formData.email.trim()) {
-        newErrors.email = 'Email is required';
+        newErrors.email = 'Email address is required';
       } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-        newErrors.email = 'Email is invalid';
+        newErrors.email = 'Please enter a valid email address';
       }
     }
     
-    // Validate password change
     if (activeTab === 'security') {
       if (!formData.currentPassword) {
         newErrors.currentPassword = 'Current password is required';
       }
+      
       if (!formData.newPassword) {
         newErrors.newPassword = 'New password is required';
       } else if (formData.newPassword.length < 8) {
-        newErrors.newPassword = 'Password must be at least 8 characters';
+        newErrors.newPassword = 'Password must be at least 8 characters long';
       }
+      
       if (formData.newPassword !== formData.confirmPassword) {
         newErrors.confirmPassword = 'Passwords do not match';
       }
@@ -90,7 +102,8 @@ const UserSettingsPage = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
+  
+  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -99,6 +112,7 @@ const UserSettingsPage = () => {
     }
     
     setIsSubmitting(true);
+    setNotificationMessage({ message: '', type: '' });
     
     try {
       if (activeTab === 'account') {
@@ -106,37 +120,43 @@ const UserSettingsPage = () => {
           username: formData.username,
           email: formData.email
         });
-        setNotificationMessage({ 
-          type: 'success', 
-          message: 'Account information updated successfully!' 
+        
+        setNotificationMessage({
+          message: 'Account information updated successfully',
+          type: 'success'
         });
       } else if (activeTab === 'security') {
         await changePassword({
           currentPassword: formData.currentPassword,
           newPassword: formData.newPassword
         });
-        setNotificationMessage({ 
-          type: 'success', 
-          message: 'Password changed successfully!' 
+        
+        setNotificationMessage({
+          message: 'Password changed successfully',
+          type: 'success'
         });
-        // Reset password fields
-        setFormData(prevState => ({
-          ...prevState,
+        
+        // Clear password fields after successful change
+        setFormData(prevData => ({
+          ...prevData,
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
         }));
       } else if (activeTab === 'notifications') {
-        // Implement saving notification settings
-        setNotificationMessage({ 
-          type: 'success', 
-          message: 'Notification preferences saved!' 
-        });
+        // Handle notification settings update
+        // This would be implemented with a proper API call
+        setTimeout(() => {
+          setNotificationMessage({
+            message: 'Notification preferences updated successfully',
+            type: 'success'
+          });
+        }, 500);
       }
     } catch (error) {
-      setNotificationMessage({ 
-        type: 'error', 
-        message: error.message || 'An error occurred. Please try again.' 
+      setNotificationMessage({
+        message: error.message || authError || 'An error occurred while saving changes',
+        type: 'error'
       });
     } finally {
       setIsSubmitting(false);

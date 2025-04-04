@@ -1,9 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { itemsService } from '../services/itemsService';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import useAuthStore from '../stores/authStore';
 import CulturalItemCard from '../components/CulturalItemCard';
+
+// Local API helper
+const itemsApi = {
+  async request(endpoint, method = 'GET', data = null) {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('token');
+    
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      credentials: 'include',
+    };
+
+    if (data && method !== 'GET') {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(`${baseURL}${endpoint}`, options);
+    
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('auth:sessionExpired'));
+      throw new Error('Session expired');
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw errorData;
+    }
+    
+    return response.status !== 204 ? await response.json() : null;
+  },
+
+  getItemById: async (id) => {
+    return await itemsApi.request(`/api/v1/cultural-items/${id}`);
+  },
+
+  getItems: async (params = {}) => {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
+    );
+    const query = new URLSearchParams(filteredParams).toString();
+    return await itemsApi.request(`/api/v1/cultural-items?${query}`);
+  },
+
+  deleteItem: async (id) => {
+    return await itemsApi.request(`/api/v1/cultural-items/${id}`, 'DELETE');
+  }
+};
 
 const ItemDetailPage = () => {
   const { id } = useParams();
@@ -21,9 +71,21 @@ const ItemDetailPage = () => {
     const fetchItemData = async () => {
       setIsLoading(true);
       try {
-        const itemData = await itemsService.getItemById(id);
-        setItem(itemData);
-        setActiveImage(itemData?.image_url || null);
+        const itemData = await itemsApi.getItemById(id);
+        // Map cultural item fields to expected format
+        const mappedItem = {
+          ...itemData,
+          title: itemData.title,
+          description: itemData.description,
+          region: itemData.region,
+          time_period: itemData.time_period,
+          image_url: itemData.image_url,
+          tags: itemData.tags,
+          created_at: itemData.created_at,
+          additional_images: itemData.media?.filter(m => m.media_type === 'image').map(m => m.url) || []
+        };
+        setItem(mappedItem);
+        setActiveImage(mappedItem?.image_url || null);
         
         // Check if current user is the owner of this item
         if (user && itemData.user_id === user.id) {
@@ -33,7 +95,7 @@ const ItemDetailPage = () => {
         // Also fetch related items
         if (itemData) {
           try {
-            const related = await itemsService.getItems({
+            const related = await itemsApi.getItems({
               region: itemData.region,
               limit: 3,
               excludeId: id
@@ -66,7 +128,7 @@ const ItemDetailPage = () => {
     }
     
     try {
-      await itemsService.deleteItem(id);
+      await itemsApi.deleteItem(id);
       navigate('/items', { replace: true });
     } catch (err) {
       alert('Failed to delete item. Please try again.');

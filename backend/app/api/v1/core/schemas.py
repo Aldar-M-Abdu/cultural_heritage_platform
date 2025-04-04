@@ -24,8 +24,7 @@ class UserBase(BaseModel):
     is_active: bool = True
     is_admin: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(UserBase):
@@ -45,15 +44,13 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserOutSchema(UserBase):
     id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserSchema(BaseModel):
@@ -237,103 +234,74 @@ class CommentSchema(CommentBase):
 
 
 ### CULTURAL ITEM SCHEMAS
-class TagBase(BaseModel):
-    name: str
-    model_config = ConfigDict(from_attributes=True)
-
-
-class Tag(BaseModel):
-    id: UUID
-    name: str
-    model_config = ConfigDict(from_attributes=True)
-
-
-class MediaType(str, Enum):
-    """Valid media types for cultural item media"""
-    IMAGE = "image"
-    VIDEO = "video"
-    AUDIO = "audio"
-    DOCUMENT = "document"
-
-
 class MediaBase(BaseModel):
     url: str
-    type: str
-    caption: Optional[str] = None
+    media_type: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+
+class MediaCreate(MediaBase):
     cultural_item_id: UUID
 
 
-class Media(BaseModel):
+class Media(MediaBase):
     id: UUID
-    url: str
-    media_type: str
-    title: str | None = None
-    description: str | None = None
+    cultural_item_id: UUID
+    created_at: datetime
+
     model_config = ConfigDict(from_attributes=True)
 
 
-class MediaCreate(BaseModel):
-    url: str
-    media_type: MediaType  # Using the enum for validation
-    title: str | None = None
-    description: str | None = None
-    cultural_item_id: UUID
+class TagBase(BaseModel):
+    name: str
+
+
+class TagCreate(TagBase):
+    pass
+
+
+class Tag(TagBase):
+    id: UUID
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class CulturalItemBase(BaseModel):
-    name: str
+    title: str
     description: Optional[str] = None
-    region: Optional[str] = None
     time_period: Optional[str] = None
+    region: Optional[str] = None
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None
+    audio_url: Optional[str] = None
+    historical_significance: Optional[str] = None
+    is_featured: Optional[bool] = False
 
 
-class CulturalItemCreate(BaseModel):
-    title: str
-    description: str | None = None
-    time_period: str | None = None
-    region: str | None = None
-    image_url: str | None = None
-    video_url: str | None = None
-    audio_url: str | None = None
-    historical_significance: str | None = None
-    tags: List[str] | None = []
+class CulturalItemCreate(CulturalItemBase):
+    tag_ids: Optional[List[UUID]] = None
 
 
-class CulturalItemUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    time_period: str | None = None
-    region: str | None = None
-    image_url: str | None = None
-    video_url: str | None = None
-    audio_url: str | None = None
-    historical_significance: str | None = None
-    tags: List[str] | None = []
-    model_config = ConfigDict(from_attributes=True)
+class CulturalItemUpdate(CulturalItemBase):
+    title: Optional[str] = None
+    tag_ids: Optional[List[UUID]] = None
+    is_featured: Optional[bool] = None
 
 
-class CulturalItem(BaseModel):
+class CulturalItem(CulturalItemBase):
     id: UUID
-    title: str
-    description: str | None = None
-    time_period: str | None = None
-    region: str | None = None
-    image_url: str | None = None
-    video_url: str | None = None
-    audio_url: str | None = None
-    historical_significance: str | None = None
+    created_at: datetime
+    updated_at: datetime
     tags: List[Tag] = []
-    media: List[Media] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class CulturalItemDetail(CulturalItem):
     media: List[Media] = []
-    comments: List[CommentSchema] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 ### ARTIFACT SCHEMAS
@@ -390,16 +358,14 @@ class ItemUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Item(ItemBase):
     id: int
     owner_id: Optional[UUID] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PasswordResetRequestSchema(BaseModel):

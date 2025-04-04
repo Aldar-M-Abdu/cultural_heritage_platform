@@ -11,9 +11,9 @@ from app.api.v1.core.endpoints import (
 router = APIRouter()
 
 # Include all endpoint routers
-router.include_router(users.router, prefix="/users")
-router.include_router(items.router, prefix="/items")
-router.include_router(cultural_items.router, prefix="/cultural-items")  # Changed from cultural_items to cultural-items
-router.include_router(comments.router, prefix="/comments")
-router.include_router(authentication.router, prefix="/auth")
-router.include_router(placeholders.router, prefix="/placeholder")
+router.include_router(users.router, prefix="/api/v1/users")
+router.include_router(items.router, prefix="/api/v1/items")
+router.include_router(cultural_items.router, prefix="/api/v1/cultural-items")
+router.include_router(comments.router, prefix="/api/v1/comments")
+router.include_router(authentication.router, prefix="/api/v1/auth")
+router.include_router(placeholders.router, prefix="/api/v1/placeholder")

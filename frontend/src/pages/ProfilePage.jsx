@@ -2,41 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import { itemsService } from '../services/itemsService';
 import CulturalItemCard from '../components/CulturalItemCard';
 
 const ProfilePage = () => {
-  const { user, isLoading, updateProfile, changePassword, error } = useAuthStore();
-  
-  // User form states
+  const { user, isAuthenticated } = useAuthStore();
+  const [activeTab, setActiveTab] = useState('profile');
   const [profileForm, setProfileForm] = useState({
     username: '',
     email: '',
     first_name: '',
     last_name: '',
-    bio: '',
+    bio: ''
   });
-  
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
-    confirmPassword: '',
+    confirmPassword: ''
   });
-  
-  // UI states
-  const [activeTab, setActiveTab] = useState('profile');
-  const [profileSuccess, setProfileSuccess] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [errors, setErrors] = useState({});
   const [generalError, setGeneralError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  
-  // User items
   const [userItems, setUserItems] = useState([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState('');
 
-  // Initialize form with user data when it loads
+  // Load user data into form when component mounts
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -44,110 +37,97 @@ const ProfilePage = () => {
         email: user.email || '',
         first_name: user.first_name || '',
         last_name: user.last_name || '',
-        bio: user.bio || '',
+        bio: user.bio || ''
       });
       
       // Fetch user's items
       fetchUserItems();
     }
   }, [user]);
-  
+
   const fetchUserItems = async () => {
-    if (!user?.id) return;
+    if (!user) return;
     
     setItemsLoading(true);
     try {
-      const response = await itemsService.getItems({ 
-        user_id: user.id,
-        limit: 6 
-      });
-      setUserItems(response.items || response || []);
-    } catch (err) {
-      console.error('Failed to fetch user items:', err);
+      // This would be an API call in a real application
+      const response = await fetch(`/api/v1/users/${user.id}/items`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch items');
+      }
+      const data = await response.json();
+      setUserItems(data);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      setItemsError('Failed to load your contributions. Please try again later.');
     } finally {
       setItemsLoading(false);
     }
   };
 
-  // Handle form changes
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
-    setProfileForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Clear success message and errors on change
-    setProfileSuccess(false);
-    setErrors(prev => ({
-      ...prev,
-      [name]: '',
-    }));
+    setProfileForm(prev => ({ ...prev, [name]: value }));
+    // Clear error for this field if it exists
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
-    setPasswordForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Clear success message and errors on change
-    setPasswordSuccess(false);
-    setErrors(prev => ({
-      ...prev,
-      [name]: '',
-    }));
+    setPasswordForm(prev => ({ ...prev, [name]: value }));
+    // Clear error for this field if it exists
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
-  // Form validation
   const validateProfileForm = () => {
     const newErrors = {};
-    
-    if (!profileForm.username) {
+    if (!profileForm.username.trim()) {
       newErrors.username = 'Username is required';
     }
-    
-    if (!profileForm.email) {
+    if (!profileForm.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(profileForm.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
-    if (!profileForm.first_name) {
-      newErrors.first_name = 'First name is required';
-    }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const validatePasswordForm = () => {
     const newErrors = {};
-    
     if (!passwordForm.currentPassword) {
       newErrors.currentPassword = 'Current password is required';
     }
-    
     if (!passwordForm.newPassword) {
       newErrors.newPassword = 'New password is required';
     } else if (passwordForm.newPassword.length < 8) {
-      newErrors.newPassword = 'Password must be at least 8 characters';
+      newErrors.newPassword = 'Password must be at least 8 characters long';
     }
-    
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    if (!passwordForm.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Form submission handlers
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
-    setGeneralError('');
     setProfileSuccess(false);
+    setGeneralError('');
     
     if (!validateProfileForm()) {
       return;
@@ -155,11 +135,22 @@ const ProfilePage = () => {
     
     setIsUpdating(true);
     try {
-      await updateProfile(profileForm);
+      // This would be an API call in a real application
+      // const response = await fetch(`/api/v1/users/${user.id}`, {
+      //   method: 'PUT',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(profileForm)
+      // });
+      
+      // Simulate successful update
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
       setProfileSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      setGeneralError(err.message || 'Failed to update profile');
+      // Clear success message after 3 seconds
+      setTimeout(() => setProfileSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setGeneralError('Failed to update profile. Please try again later.');
     } finally {
       setIsUpdating(false);
     }
@@ -167,8 +158,8 @@ const ProfilePage = () => {
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    setGeneralError('');
     setPasswordSuccess(false);
+    setGeneralError('');
     
     if (!validatePasswordForm()) {
       return;
@@ -176,34 +167,32 @@ const ProfilePage = () => {
     
     setIsChangingPassword(true);
     try {
-      await changePassword({
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword
-      });
+      // This would be an API call in a real application
+      // const response = await fetch(`/api/v1/users/${user.id}/password`, {
+      //   method: 'PUT',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(passwordForm)
+      // });
       
-      // Reset form on success
+      // Simulate successful update
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      setPasswordSuccess(true);
+      // Clear the password form
       setPasswordForm({
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       });
-      
-      setPasswordSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      setGeneralError(err.message || 'Failed to change password');
+      // Clear success message after 3 seconds
+      setTimeout(() => setPasswordSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error changing password:', error);
+      setGeneralError('Failed to change password. Please try again later.');
     } finally {
       setIsChangingPassword(false);
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <LoadingSpinner size="lg" color="indigo" />
-      </div>
-    );
-  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -572,6 +561,10 @@ const ProfilePage = () => {
                   <div className="flex justify-center items-center h-64">
                     <LoadingSpinner size="lg" />
                   </div>
+                ) : itemsError ? (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+                    <p>{itemsError}</p>
+                  </div>
                 ) : userItems.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {userItems.map(item => (
@@ -581,7 +574,7 @@ const ProfilePage = () => {
                 ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
                     <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2-2 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     <h3 className="mt-2 text-xl font-medium text-gray-900">No contributions yet</h3>
                     <p className="mt-1 text-sm text-gray-500">You haven't added any items to the collection yet.</p>

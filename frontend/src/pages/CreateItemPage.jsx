@@ -4,6 +4,60 @@ import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
+// Local API helper
+const itemsApi = {
+  async request(endpoint, method = 'GET', data = null) {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('token');
+    
+    const options = {
+      method,
+      headers: {
+        ...(!(data instanceof FormData) && {'Content-Type': 'application/json'}),
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      credentials: 'include',
+    };
+
+    if (data) {
+      options.body = data instanceof FormData ? data : JSON.stringify(data);
+    }
+
+    const response = await fetch(`${baseURL}${endpoint}`, options);
+    
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('auth:sessionExpired'));
+      throw new Error('Session expired');
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw errorData;
+    }
+    
+    return response.status !== 204 ? await response.json() : null;
+  },
+
+  createItem: async (itemData) => {
+    // Convert the form data to match CulturalItemCreate schema
+    if (itemData instanceof FormData) {
+      // For file uploads, handle multipart form data
+      return await itemsApi.request('/api/v1/cultural-items', 'POST', itemData);
+    } else {
+      // Map fields to match CulturalItemCreate schema
+      const culturalItemData = {
+        title: itemData.name,
+        description: itemData.description,
+        time_period: itemData.era,
+        region: itemData.location,
+        historical_significance: itemData.significance,
+        // Add any other relevant fields
+      };
+      return await itemsApi.request('/api/v1/cultural-items', 'POST', culturalItemData);
+    }
+  }
+};
+
 const CreateItemPage = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuthStore();
@@ -133,17 +187,23 @@ const CreateItemPage = () => {
     }
     setIsSubmitting(true);
     try {
+      // Create FormData object for submission with files
       const formDataToSubmit = new FormData();
-      formDataToSubmit.append('name', formData.name);
-      formDataToSubmit.append('category', formData.category);
-      formDataToSubmit.append('era', formData.era);
-      formDataToSubmit.append('location', formData.location);
-      formDataToSubmit.append('significance', formData.significance);
+      // Map field names to match cultural items schema
+      formDataToSubmit.append('title', formData.name);
       formDataToSubmit.append('description', formData.description);
+      formDataToSubmit.append('time_period', formData.era);
+      formDataToSubmit.append('region', formData.location);
+      formDataToSubmit.append('historical_significance', formData.significance);
+      
+      // Add files to form data
       files.forEach((fileObj, index) => {
         formDataToSubmit.append(`file${index}`, fileObj.file);
       });
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Use the local API method
+      const response = await itemsApi.createItem(formDataToSubmit);
+      
       setSubmitSuccess(true);
       setFormData({
         name: '',
@@ -160,7 +220,7 @@ const CreateItemPage = () => {
       }, 3000);
     } catch (error) {
       console.error('Error submitting item:', error);
-      setSubmitError('Failed to create item. Please try again later.');
+      setSubmitError(error.response?.data?.detail || 'Failed to create item. Please try again later.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSubmitting(false);

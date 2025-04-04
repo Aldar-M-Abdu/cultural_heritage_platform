@@ -5,46 +5,17 @@ import CulturalItemListCard from '../components/CulturalItemListCard';
 import Pagination from '../components/common/Pagination';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ItemSearchBar from '../components/ItemSearchBar';
-import { itemsService } from '../services/itemsService';
 
-// Keep these static for filter options
-const regions = [
-  "Scandinavia",
-  "Greece",
-  "Mesoamerica",
-  "China",
-  "Western Europe",
-  "Persia",
-  "Egypt",
-  "Rome",
-  "India",
-  "Japan"
-];
-
-const timePeriods = [
-  "Stone Age (before 3300 BCE)",
-  "Bronze Age (3300-1200 BCE)",
-  "Iron Age (1200-550 BCE)",
-  "Classical Period (480-323 BCE)",
-  "Roman Period (27 BCE-476 CE)",
-  "Viking Age (793-1066 CE)",
-  "Middle Ages (476-1453 CE)",
-  "Renaissance (1300-1600 CE)",
-  "Early Modern Period (1500-1800 CE)",
-  "Modern Era (1800 CE-Present)"
-];
-
+// Sample data for filters - replace with API data when available
+const regions = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'];
+const timePeriods = ['Ancient (Before 500 CE)', 'Medieval (500-1500 CE)', 'Early Modern (1500-1800 CE)', 'Modern (1800-present)'];
 const popularTags = [
-  { id: 1, name: "Jewelry" },
-  { id: 2, name: "Viking" },
-  { id: 4, name: "Pottery" },
-  { id: 6, name: "Ceremonial" },
-  { id: 9, name: "Bronze" },
-  { id: 11, name: "Manuscript" },
-  { id: 14, name: "Ceramics" },
-  { id: 15, name: "Islamic Art" },
-  { id: 16, name: "Weapons" },
-  { id: 17, name: "Tools" }
+  { id: 1, name: 'Pottery' },
+  { id: 2, name: 'Sculpture' },
+  { id: 3, name: 'Painting' },
+  { id: 4, name: 'Jewelry' },
+  { id: 5, name: 'Weaponry' },
+  { id: 6, name: 'Clothing' }
 ];
 
 const ItemsListPage = () => {
@@ -63,10 +34,83 @@ const ItemsListPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage] = useState(12);
 
+  // Define API helper for HTTP requests
+  const api = {
+    async request(endpoint, method = 'GET', data = null) {
+      const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+      const token = localStorage.getItem('token');
+      
+      const options = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        credentials: 'include',
+      };
+
+      if (data && method !== 'GET') {
+        options.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(`${baseURL}${endpoint}`, options);
+      
+      if (response.status === 401) {
+        window.dispatchEvent(new Event('auth:sessionExpired'));
+        throw new Error('Session expired');
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw errorData.message ? errorData : new Error('API request failed');
+      }
+      
+      return response.status !== 204 ? await response.json() : null;
+    },
+    
+    get: async (endpoint, params = {}) => {
+      const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
+      );
+      const query = new URLSearchParams(filteredParams).toString();
+      return await api.request(`${endpoint}${query ? `?${query}` : ''}`);
+    }
+  };
+
+  // API functions for items
+  const itemsApi = {
+    getCulturalItems: async (params = {}) => {
+      return await api.get('/api/v1/cultural-items', params);
+    },
+    
+    getFeaturedItems: async () => {
+      return await api.get('/api/v1/cultural-items/featured');
+    },
+    
+    searchItems: async (searchTerm, params = {}) => {
+      return await api.get('/api/v1/cultural-items/search', { 
+        ...params,
+        query: searchTerm
+      });
+    },
+    
+    getItemsByTag: async (tag, params = {}) => {
+      return await api.get(`/api/v1/cultural-items/tags/${tag}`, params);
+    },
+    
+    getItemsByRegion: async (region, params = {}) => {
+      return await api.get(`/api/v1/cultural-items/regions/${region}`, params);
+    },
+    
+    getItemsByTimePeriod: async (period, params = {}) => {
+      return await api.get(`/api/v1/cultural-items/time-periods/${period}`, params);
+    }
+  };
+
   // Update the URL with filters and pagination
   useEffect(() => {
     const params = new URLSearchParams();
-    
+        
     if (searchTerm) params.set('search', searchTerm);
     if (selectedRegion) params.set('region', selectedRegion);
     if (selectedTimePeriod) params.set('period', selectedTimePeriod);
@@ -85,26 +129,99 @@ const ItemsListPage = () => {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const params = {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: searchTerm,
-          region: selectedRegion,
-          period: selectedTimePeriod,
-          tag: selectedTag,
-        };
-
-        const response = await itemsService.getItems(params); // Updated to use the corrected endpoint
-        setItems(response.items || []);
-        setFilteredItems(response.items || []);
-        setTotalPages(response.pagination?.totalPages || 1);
+        setIsLoading(true);
+        let response;
+        
+        if (searchTerm) {
+          // Search items by term
+          response = await itemsApi.searchItems(searchTerm, {
+            page: currentPage,
+            limit: itemsPerPage,
+            region: selectedRegion,
+            time_period: selectedTimePeriod,
+            tag: selectedTag
+          });
+        } else if (selectedTag) {
+          // Get items by tag
+          response = await itemsApi.getItemsByTag(selectedTag, {
+            page: currentPage,
+            limit: itemsPerPage,
+            region: selectedRegion,
+            time_period: selectedTimePeriod
+          });
+        } else if (selectedRegion && selectedTimePeriod) {
+          // Get items with both region and time period
+          response = await itemsApi.getItemsByRegion(selectedRegion, {
+            page: currentPage,
+            limit: itemsPerPage,
+            time_period: selectedTimePeriod
+          });
+        } else if (selectedRegion) {
+          // Get items by region
+          response = await itemsApi.getItemsByRegion(selectedRegion, {
+            page: currentPage,
+            limit: itemsPerPage
+          });
+        } else if (selectedTimePeriod) {
+          // Get items by time period
+          response = await itemsApi.getItemsByTimePeriod(selectedTimePeriod, {
+            page: currentPage,
+            limit: itemsPerPage
+          });
+        } else {
+          // Get all items with pagination
+          response = await itemsApi.getCulturalItems({
+            page: currentPage,
+            limit: itemsPerPage,
+            sort_by: "created_at",
+            sort_order: "desc"
+          });
+        }
+        
+        // Adjust to handle both array and object with pagination returned from API
+        if (Array.isArray(response)) {
+          const mappedItems = response.map(item => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            region: item.region,
+            time_period: item.time_period,
+            image_url: item.image_url,
+            tags: item.tags,
+            created_at: item.created_at
+          }));
+          setItems(mappedItems);
+          setFilteredItems(mappedItems);
+          setTotalPages(Math.ceil(mappedItems.length / itemsPerPage));
+        } else {
+          // If API returns object with items array and pagination
+          const mappedItems = (response.items || []).map(item => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            region: item.region,
+            time_period: item.time_period,
+            image_url: item.image_url,
+            tags: item.tags,
+            created_at: item.created_at
+          }));
+          setItems(mappedItems);
+          setFilteredItems(mappedItems);
+          setTotalPages(response.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
+        }
 
         setActiveFilters(
           [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
         );
       } catch (err) {
         console.error('Failed to fetch items:', err);
-        setError('Failed to load items. Please check your network connection or try again later.');
+        if (err.message === 'Resource not found') {
+          setError('No items found for the specified criteria.');
+        } else {
+          setError('Failed to load items. Please check your network connection or try again later.');
+        }
+        setItems([]);
+        setFilteredItems([]);
       } finally {
         setIsLoading(false);
       }
@@ -113,23 +230,7 @@ const ItemsListPage = () => {
     fetchItems();
   }, [searchTerm, selectedRegion, selectedTimePeriod, selectedTag, currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    const fetchFeaturedItems = async () => {
-      try {
-        const response = await itemsService.getFeaturedItems(); // Updated to use the corrected endpoint
-        setItems(response.items || []);
-      } catch (err) {
-        console.error('Failed to fetch featured items:', err);
-        setError('Failed to load featured items. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchFeaturedItems();
-  }, []);
-
-  // Handle search submissions
+  // Handle search submission
   const handleSearchSubmit = useCallback((newSearchTerm) => {
     setSearchTerm(newSearchTerm);
     setCurrentPage(1); // Reset to first page on new search

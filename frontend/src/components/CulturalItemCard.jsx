@@ -7,7 +7,7 @@ const CulturalItemCard = ({ item }) => {
   
   return (
     <Link 
-      to={`/cultural_items/${item.id}`} 
+      to={`/items/${item.id}`} 
       className="block h-full transition-all hover:-translate-y-1 duration-200"
     >
       <div className="bg-white rounded-lg shadow overflow-hidden h-full border border-gray-100 hover:shadow-lg">

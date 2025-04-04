@@ -1,25 +1,62 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from sqlalchemy import or_
 
-from app.api.v1.core.models import CulturalItem, Tag, Media, Comment
-from app.api.v1.core.schemas import CulturalItemCreate, CulturalItemUpdate, MediaCreate
+from app.api.v1.core.models import (
+    CulturalItem,
+    Tag,
+    Media,
+    cultural_item_tag,
+)
+from app.api.v1.core.schemas import (
+    CulturalItemCreate,
+    CulturalItemUpdate,
+    MediaCreate,
+)
 
-
-def get_cultural_items(db: Session, skip: int = 0, limit: int = 12):
-    """
-    Get paginated cultural items from the database.
-    """
-    # Avoid querying is_featured column which doesn't exist in the database
+def get_cultural_items(db: Session, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
     return db.query(CulturalItem).offset(skip).limit(limit).all()
 
+def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
+    search = f"%{query}%"
+    return db.query(CulturalItem).filter(
+        or_(
+            CulturalItem.title.ilike(search),
+            CulturalItem.description.ilike(search),
+            CulturalItem.region.ilike(search),
+            CulturalItem.time_period.ilike(search),
+            CulturalItem.historical_significance.ilike(search)
+        )
+    ).offset(skip).limit(limit).all()
 
-def get_cultural_item(db: Session, cultural_item_id: UUID):
+def get_all_tags(db: Session, skip: int = 0, limit: int = 100) -> List[Tag]:
+    return db.query(Tag).offset(skip).limit(limit).all()
+
+def get_cultural_items_by_tag(db: Session, tag_name: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
+    tag = db.query(Tag).filter(Tag.name == tag_name).first()
+    if not tag:
+        return []
+    return tag.cultural_items[skip:skip + limit]
+
+def get_cultural_items_by_region(db: Session, region: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
+    return db.query(CulturalItem).filter(CulturalItem.region.ilike(f"%{region}%")).offset(skip).limit(limit).all()
+
+def get_cultural_items_by_time_period(db: Session, time_period: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
+    return db.query(CulturalItem).filter(CulturalItem.time_period.ilike(f"%{time_period}%")).offset(skip).limit(limit).all()
+
+def get_featured_cultural_items(db: Session, skip: int = 0, limit: int = 10) -> List[CulturalItem]:
+    """Get cultural items that are marked as featured."""
+    return db.query(CulturalItem).filter(CulturalItem.is_featured == True).offset(skip).limit(limit).all()
+
+def get_cultural_item(db: Session, cultural_item_id: UUID) -> Optional[CulturalItem]:
     return db.query(CulturalItem).filter(CulturalItem.id == cultural_item_id).first()
 
-
-def create_cultural_item(db: Session, item: CulturalItemCreate):
+def create_cultural_item(db: Session, item: CulturalItemCreate) -> CulturalItem:
+    # Extract tag IDs to associate with the cultural item
+    tag_ids = item.tag_ids if hasattr(item, 'tag_ids') else []
+    
+    # Create the cultural item
     db_item = CulturalItem(
         title=item.title,
         description=item.description,
@@ -29,74 +66,20 @@ def create_cultural_item(db: Session, item: CulturalItemCreate):
         video_url=item.video_url,
         audio_url=item.audio_url,
         historical_significance=item.historical_significance,
+        is_featured=item.is_featured if hasattr(item, 'is_featured') else False
     )
     
-    # Handle tags
-    if item.tags:
-        for tag_name in item.tags:
-            tag = db.query(Tag).filter(Tag.name == tag_name).first()
-            if not tag:
-                tag = Tag(name=tag_name)
-                db.add(tag)
-                db.flush()
-            db_item.tags.append(tag)
+    # Add tags
+    if tag_ids:
+        tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
+        db_item.tags = tags
     
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
 
-
-def update_cultural_item(db: Session, cultural_item_id: UUID, item: CulturalItemUpdate):
-    db_item = get_cultural_item(db, cultural_item_id)
-    if not db_item:
-        return None
-    
-    # Update fields if provided
-    update_data = item.dict(exclude_unset=True)
-    
-    # Handle tags separately
-    if "tags" in update_data:
-        tags = update_data.pop("tags")
-        db_item.tags = []  # Remove existing tags
-        
-        if tags:
-            for tag_name in tags:
-                tag = db.query(Tag).filter(Tag.name == tag_name).first()
-                if not tag:
-                    tag = Tag(name=tag_name)
-                    db.add(tag)
-                    db.flush()
-                db_item.tags.append(tag)
-    
-    # Update other fields
-    for key, value in update_data.items():
-        setattr(db_item, key, value)
-    
-    db.commit()
-    db.refresh(db_item)
-    return db_item
-
-
-def delete_cultural_item(db: Session, cultural_item_id: UUID):
-    db_item = get_cultural_item(db, cultural_item_id)
-    if not db_item:
-        return False
-    
-    db.delete(db_item)
-    db.commit()
-    return True
-
-
-def create_media(db: Session, media: MediaCreate):
-    # Check if cultural item exists
-    cultural_item = get_cultural_item(db, media.cultural_item_id)
-    if not cultural_item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cultural item with ID {media.cultural_item_id} not found"
-        )
-        
+def create_media(db: Session, media: MediaCreate) -> Media:
     db_media = Media(
         url=media.url,
         media_type=media.media_type,
@@ -104,81 +87,35 @@ def create_media(db: Session, media: MediaCreate):
         description=media.description,
         cultural_item_id=media.cultural_item_id
     )
-    
     db.add(db_media)
     db.commit()
     db.refresh(db_media)
     return db_media
 
-
-def get_all_tags(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Tag).offset(skip).limit(limit).all()
-
-
-def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 100):
-    if not query:
-        return []
-        
-    search = f"%{query}%"
-    return db.query(CulturalItem).filter(
-        CulturalItem.title.ilike(search) | CulturalItem.description.ilike(search)
-    ).offset(skip).limit(limit).all()
-
-
-def get_cultural_items_by_tag(db: Session, tag_name: str, skip: int = 0, limit: int = 100):
-    if not tag_name:
-        return []
-        
-    return db.query(CulturalItem).join(CulturalItem.tags).filter(
-        Tag.name == tag_name
-    ).offset(skip).limit(limit).all()
-
-
-def get_cultural_items_by_region(db: Session, region: str, skip: int = 0, limit: int = 100):
-    if not region:
-        return []
-        
-    return db.query(CulturalItem).filter(
-        CulturalItem.region == region
-    ).offset(skip).limit(limit).all()
-
-
-def get_cultural_items_by_time_period(db: Session, time_period: str, skip: int = 0, limit: int = 100):
-    if not time_period:
-        return []
-        
-    return db.query(CulturalItem).filter(
-        CulturalItem.time_period == time_period
-    ).offset(skip).limit(limit).all()
-
-
-def get_comments(db: Session, cultural_item_id: UUID):
-    if not cultural_item_id:
-        return []
-        
-    return db.query(Comment).filter(Comment.cultural_item_id == cultural_item_id).all()
-
-
-def get_featured_cultural_items(db: Session, skip: int = 0, limit: int = 10) -> List[CulturalItem]:
-    """
-    Retrieves featured cultural items from the database.
+def update_cultural_item(db: Session, cultural_item_id: UUID, item: CulturalItemUpdate) -> Optional[CulturalItem]:
+    db_item = get_cultural_item(db, cultural_item_id)
+    if not db_item:
+        return None
     
-    Since the is_featured column doesn't exist in the database, we'll return
-    the most recent items instead.
+    # Update fields
+    for key, value in item.dict(exclude_unset=True).items():
+        if key == 'tag_ids':
+            # Handle tags separately
+            if value:
+                tags = db.query(Tag).filter(Tag.id.in_(value)).all()
+                db_item.tags = tags
+        else:
+            setattr(db_item, key, value)
     
-    Args:
-        db: Database session
-        skip: Number of items to skip (for pagination)
-        limit: Maximum number of items to return
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+def delete_cultural_item(db: Session, cultural_item_id: UUID) -> bool:
+    db_item = get_cultural_item(db, cultural_item_id)
+    if not db_item:
+        return False
     
-    Returns:
-        List of most recent cultural items
-    """
-    # Using created_at to sort by most recent instead of filtering by is_featured
-    featured_items = db.query(CulturalItem)\
-                      .order_by(CulturalItem.created_at.desc())\
-                      .offset(skip)\
-                      .limit(limit)\
-                      .all()
-    
-    return featured_items
+    db.delete(db_item)
+    db.commit()
+    return True

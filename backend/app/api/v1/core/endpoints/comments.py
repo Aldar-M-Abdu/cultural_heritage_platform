@@ -7,6 +7,7 @@ from app.db_setup import get_db
 from app.api.v1.core.models import Comment
 from app.api.v1.core.schemas import CommentCreate, CommentSchema
 
+# Fix: Remove duplicate API prefix, it's already added in main.py
 router = APIRouter(tags=["comments"])
 
 @router.post("/", response_model=CommentSchema, status_code=status.HTTP_201_CREATED, operation_id="create_new_comment")

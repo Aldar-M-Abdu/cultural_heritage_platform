@@ -43,6 +43,7 @@ class CulturalItem(Base):
     # Historical significance
     historical_significance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
+    
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -186,8 +187,5 @@ class Item(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    tags: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Comma separated tags
-    materials: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)  # Added field
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

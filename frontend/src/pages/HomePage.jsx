@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { itemsService } from '../services/itemsService'; // Ensure this import is correct
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import CulturalItemCard from '../components/CulturalItemCard';
 import ItemSearchBar from '../components/ItemSearchBar';
@@ -36,6 +35,53 @@ const fallbackItems = [
   }
 ];
 
+// Local API helper
+const itemsApi = {
+  async request(endpoint, method = 'GET', data = null) {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('token');
+    
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      credentials: 'include',
+    };
+
+    if (data && method !== 'GET') {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(`${baseURL}${endpoint}`, options);
+    
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('auth:sessionExpired'));
+      throw new Error('Session expired');
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw errorData.message ? errorData : new Error('API request failed');
+    }
+    
+    return response.status !== 204 ? await response.json() : null;
+  },
+
+  getItems: async (params = {}) => {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
+    );
+    const query = new URLSearchParams(filteredParams).toString();
+    return await itemsApi.request(`/api/v1/cultural-items?${query}`);
+  },
+
+  getFeaturedItems: async () => {
+    return await itemsApi.request('/api/v1/cultural-items/featured');
+  }
+};
+
 const HomePage = () => {
   const [featuredItems, setFeaturedItems] = useState([]);
   const [recentItems, setRecentItems] = useState([]);
@@ -46,24 +92,25 @@ const HomePage = () => {
     const fetchItems = async () => {
       setIsLoading(true);
       try {
-        // Fetch featured items
-        const featured = await itemsService.getFeaturedItems();
+        const featured = await itemsApi.getFeaturedItems();
         setFeaturedItems(featured?.items || featured || []);
-        
-        // Fetch recent items
-        const recent = await itemsService.getItems({ sort: 'created_at', limit: 3 });
+
+        const recent = await itemsApi.getItems({ sort: 'created_at', limit: 3 });
         setRecentItems(recent?.items || recent || []);
       } catch (err) {
-        console.error('Error fetching items:', err);
-        // Use fallback data
+        if (err.message === 'Resource not found') {
+          setError('No items found to display.');
+        } else {
+          console.error('Error fetching items:', err);
+          setError('Unable to load latest items. Showing sample content.');
+        }
         setFeaturedItems(fallbackItems);
         setRecentItems(fallbackItems);
-        setError('Unable to load latest items. Showing sample content.');
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     fetchItems();
   }, []);
 

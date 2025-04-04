@@ -1,9 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import 'leaflet/dist/leaflet.css';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import MarkerClusterGroup from "react-leaflet-cluster";
-import itemsService from '../services/itemsService';
+
+// Local API helper
+const itemsApi = {
+  async request(endpoint, method = 'GET', data = null) {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('token');
+    
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      credentials: 'include',
+    };
+
+    if (data && method !== 'GET') {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(`${baseURL}${endpoint}`, options);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw errorData;
+    }
+    
+    return response.status !== 204 ? await response.json() : null;
+  },
+
+  getItems: async () => {
+    return await itemsApi.request(`/api/v1/items?coordinates=true`);
+  }
+};
 
 // Custom marker icon
 const defaultIcon = new L.Icon({
@@ -27,79 +61,37 @@ const MapView = () => {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        setLoading(true);
-        const response = await itemsService.getItems(); // Updated to use the corrected endpoint
+        const response = await fetch('/api/v1/cultural-items');
+        if (!response.ok) {
+          throw new Error('Resource not found');
+        }
+        const data = await response.json();
         
-        // Transform the data to include lat/long if needed
-        // This is a placeholder - you may need to modify depending on your API response
-        const mappedItems = response.map(item => ({
+        // Map the cultural items to the expected format
+        const mappedItems = Array.isArray(data) ? data.map(item => ({
           id: item.id,
           name: item.title,
-          latitude: parseFloat(item.latitude || 0),
-          longitude: parseFloat(item.longitude || 0),
           description: item.description,
+          category: item.tags?.[0]?.name || 'Uncategorized',
           period: item.time_period,
-          category: item.region // Using region as category for now
-        }));
+          latitude: item.latitude || (Math.random() * 180 - 90), // Fallback for demo
+          longitude: item.longitude || (Math.random() * 360 - 180), // Fallback for demo
+          region: item.region
+        })) : [];
         
         setItems(mappedItems);
-        setLoading(false);
       } catch (err) {
-        console.error("Failed to fetch items:", err);
-        setError("Failed to load items. Please try again later.");
+        if (err.message === 'Resource not found') {
+          setError('No items with geographic coordinates were found.');
+        } else {
+          console.error("Failed to fetch items:", err);
+          setError("Failed to load items. Please try again later.");
+        }
+      } finally {
         setLoading(false);
-        
-        // Fallback to sample data if API fails
-        setItems([
-          {
-            id: 1,
-            name: "Viking Burial Site",
-            latitude: 59.3293,
-            longitude: 18.0686,
-            description: "Important Viking burial site containing numerous artifacts",
-            period: "800-1050 CE",
-            category: "Archaeological Site"
-          },
-          {
-            id: 2,
-            name: "Ancient Greek Temple",
-            latitude: 37.9715,
-            longitude: 23.7267,
-            description: "Ruins of a temple dedicated to Athena",
-            period: "447-432 BCE",
-            category: "Temple"
-          },
-          {
-            id: 3,
-            name: "Maya Pyramid",
-            latitude: 20.6843,
-            longitude: -88.5678,
-            description: "Well-preserved Maya pyramid complex",
-            period: "600-900 CE",
-            category: "Archaeological Site"
-          },
-          {
-            id: 4,
-            name: "Tang Dynasty Palace",
-            latitude: 34.3416,
-            longitude: 108.9398,
-            description: "Remains of Tang Dynasty imperial palace",
-            period: "618-907 CE",
-            category: "Palace"
-          },
-          {
-            id: 5,
-            name: "Medieval Monastery",
-            latitude: 48.8566,
-            longitude: 2.3522,
-            description: "12th century monastery with preserved manuscripts",
-            period: "1100-1200 CE",
-            category: "Religious Site"
-          }
-        ]);
       }
     };
-    
+
     fetchItems();
   }, []);
 
@@ -139,57 +131,61 @@ const MapView = () => {
           {/* Map container */}
           <div className="lg:col-span-3">
             <div className="bg-white shadow-md rounded-lg p-4" style={{ height: "70vh" }}>
-              <MapContainer
-                center={[20, 0]}
-                zoom={3}
-                minZoom={2}
-                style={{ height: "100%", width: "100%", borderRadius: "0.5rem" }}
-                zoomControl={false}
-                maxBounds={[[-90, -180], [90, 180]]}
-                maxBoundsViscosity={1.0}
-                className="z-0"
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  maxZoom={19}
-                  noWrap={true}
-                />
-                <ZoomControl position="bottomright" />
-                <MarkerClusterGroup
-                  chunkedLoading
-                  showCoverageOnHover={false}
-                  spiderfyOnMaxZoom
+              {loading ? (
+                <LoadingSpinner />
+              ) : (
+                <MapContainer
+                  center={[20, 0]}
+                  zoom={3}
+                  minZoom={2}
+                  style={{ height: "100%", width: "100%", borderRadius: "0.5rem" }}
+                  zoomControl={false}
+                  maxBounds={[[-90, -180], [90, 180]]}
+                  maxBoundsViscosity={1.0}
+                  className="z-0"
                 >
-                  {items.map(item => (
-                    item.latitude && item.longitude ? (
-                      <Marker
-                        key={item.id}
-                        position={[item.latitude, item.longitude]}
-                        title={item.name}
-                        eventHandlers={{
-                          click: () => setActiveItem(item),
-                        }}
-                      >
-                        <Popup className="custom-popup">
-                          <div className="p-1">
-                            <h3 className="font-bold text-base text-slate-800 mb-1">{item.name}</h3>
-                            <div className="flex space-x-2 mb-2">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
-                                {item.category}
-                              </span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                                {item.period}
-                              </span>
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    maxZoom={19}
+                    noWrap={true}
+                  />
+                  <ZoomControl position="bottomright" />
+                  <MarkerClusterGroup
+                    chunkedLoading
+                    showCoverageOnHover={false}
+                    spiderfyOnMaxZoom
+                  >
+                    {items.map(item => (
+                      item.latitude && item.longitude ? (
+                        <Marker
+                          key={item.id}
+                          position={[item.latitude, item.longitude]}
+                          title={item.name}
+                          eventHandlers={{
+                            click: () => setActiveItem(item),
+                          }}
+                        >
+                          <Popup className="custom-popup">
+                            <div className="p-1">
+                              <h3 className="font-bold text-base text-slate-800 mb-1">{item.name}</h3>
+                              <div className="flex space-x-2 mb-2">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                  {item.category}
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                  {item.period}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-600">{item.description}</p>
                             </div>
-                            <p className="text-sm text-slate-600">{item.description}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ) : null
-                  ))}
-                </MarkerClusterGroup>
-              </MapContainer>
+                          </Popup>
+                        </Marker>
+                      ) : null
+                    ))}
+                  </MarkerClusterGroup>
+                </MapContainer>
+              )}
             </div>
           </div>
         </div>

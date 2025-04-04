@@ -21,14 +21,13 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,  # Detect disconnections
     pool_recycle=3600,   # Recycle connections after an hour
-    connect_args={"connect_timeout": 10}  # Increased timeout to 10 seconds
+    connect_args={"connect_timeout": 20}  # Increased timeout to 20 seconds
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def is_db_connected():
     """Check if the database is connected and available"""
     try:
-        # Try to connect and execute a simple query with a timeout
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
@@ -39,7 +38,6 @@ def is_db_connected():
 def init_db():
     """Initialize the database with tables"""
     try:
-        # Create tables
         Base.metadata.create_all(bind=engine)
         logging.info("Database tables created successfully")
     except Exception as e:

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 router = APIRouter(tags=["auth"])
 
 
-@router.post("/token", operation_id="get_access_token")
+@router.post("/token", operation_id="get_access_token_main")
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Session = Depends(get_db),
@@ -45,7 +45,7 @@ def login(
     return {"access_token": access_token.token, "token_type": "bearer"}
 
 
-@router.post("/login", operation_id="login_user")
+@router.post("/login-alternate", operation_id="login_user_alternate")
 def login_alternate(
     username: str = Form(...),  # Ensure username is required
     password: str = Form(...),  # Ensure password is required
@@ -68,7 +68,7 @@ def login_alternate(
     return {"access_token": access_token.token, "token_type": "bearer"}
 
 
-@router.delete("/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="logout_user")
+@router.delete("/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="logout_user_main")
 def logout(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -78,7 +78,7 @@ def logout(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/user/create", response_model=UserOutSchema, status_code=status.HTTP_201_CREATED, operation_id="create_user")
+@router.post("/register", response_model=UserOutSchema, status_code=status.HTTP_201_CREATED, operation_id="register_new_user")
 def register_user(
     user: UserRegisterSchema, db: Session = Depends(get_db)
 ) -> UserOutSchema:
@@ -107,7 +107,7 @@ def register_user(
     return new_user
 
 
-@router.put("/user/update", response_model=UserOutSchema, operation_id="update_user_profile")
+@router.put("/update-profile", response_model=UserOutSchema, operation_id="update_user_profile_main")
 def update_user(
     user: UserRegisterSchema,
     current_token: Token = Depends(get_current_token),
@@ -152,7 +152,7 @@ def update_user(
     return current_user
 
 
-@router.delete("/user/delete", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_user_account")
+@router.delete("/delete-account", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_user_account_main")
 def delete_user(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -171,7 +171,7 @@ def delete_user(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/token/refresh", operation_id="refresh_access_token")
+@router.post("/refresh-token", operation_id="refresh_access_token_main")
 def refresh_token(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
@@ -182,7 +182,7 @@ def refresh_token(
     )
 
 
-@router.post("/password-reset/request", status_code=status.HTTP_200_OK, operation_id="request_password_reset_email")
+@router.post("/password-reset", status_code=status.HTTP_200_OK, operation_id="request_password_reset_email_main")
 def request_password_reset(email: str = Form(...), db: Session = Depends(get_db)):
     """Send a password reset email with a token"""
     user = db.execute(select(User).where(User.email == email)).scalars().first()
@@ -206,7 +206,7 @@ def request_password_reset(email: str = Form(...), db: Session = Depends(get_db)
     return {"detail": "Password reset link sent"}
 
 
-@router.post("/password-reset/confirm", status_code=status.HTTP_200_OK, operation_id="confirm_password_reset_token")
+@router.post("/password-reset/confirm", status_code=status.HTTP_200_OK, operation_id="confirm_password_reset_token_main")
 def confirm_password_reset(token: str = Form(...), new_password: str = Form(...), db: Session = Depends(get_db)):
     """Reset password using the token from email"""
     user = db.execute(
@@ -233,7 +233,7 @@ def confirm_password_reset(token: str = Form(...), new_password: str = Form(...)
     return {"detail": "Password has been reset successfully"}
 
 
-@router.post("/change-password", status_code=status.HTTP_200_OK, operation_id="change_user_password")
+@router.put("/change-password", status_code=status.HTTP_200_OK, operation_id="change_user_password_main")
 def change_password(
     current_password: str = Form(...),
     new_password: str = Form(...),
@@ -254,7 +254,7 @@ def change_password(
     return {"detail": "Password changed successfully"}
 
 
-@router.get("/me", response_model=UserOutSchema, operation_id="get_current_user")
+@router.get("/current-user", response_model=UserOutSchema, operation_id="get_current_user_main")
 def get_current_user(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),

@@ -38,16 +38,16 @@ const ScrollToTop = () => {
 };
 
 function App() {
-  const { fetchUser, token } = useAuthStore();
+  const { checkAuth, token } = useAuthStore();
 
   // Check authentication state when app loads
   useEffect(() => {
     if (token) {
-      fetchUser().catch(error => {
+      checkAuth().catch(error => {
         console.error('Failed to fetch user data:', error);
       });
     }
-  }, [token, fetchUser]);
+  }, [token, checkAuth]);
 
   // Listen for custom auth events
   useEffect(() => {

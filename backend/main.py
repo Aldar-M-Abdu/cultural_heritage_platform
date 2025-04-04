@@ -5,6 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.openapi.utils import get_openapi
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from app.api.v1.routers import router
@@ -67,16 +68,34 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app with enhanced error handling
 app = FastAPI(
     lifespan=lifespan, 
-    title="Cultural Heritage Platform API",
-    description="API for managing cultural heritage items",
-    version="1.0.0"
+    title="Cultural Heritage API",
+    description="API documentation for the Cultural Heritage Platform",
+    version="1.0.0",
+    docs_url="/docs",  # Swagger UI
+    redoc_url="/redoc",  # ReDoc UI
+    openapi_url="/openapi.json"  # OpenAPI schema
 )
 
-# Modified middleware: Skip API routes to prevent redirect loops
+# Function to customize OpenAPI schema
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="Cultural Heritage API",
+        version="1.0.0",
+        description="API documentation for the Cultural Heritage Platform",
+        routes=app.routes,
+    )
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Modified middleware: Skip API routes and documentation routes to prevent redirect loops
 @app.middleware("http")
 async def redirect_trailing_slash(request, call_next):
-    # Skip API routes to prevent redirect loops
-    if "/api/" in request.url.path:
+    # Skip API routes and documentation routes to prevent redirect loops
+    if request.url.path.startswith("/api/") or request.url.path in ["/docs", "/redoc", "/openapi.json"]:
         return await call_next(request)
     
     if not request.url.path.endswith("/") and request.url.path != "/":
@@ -89,11 +108,15 @@ app.include_router(authentication.router, prefix="/api/v1/auth")
 app.include_router(cultural_items.router, prefix="/api/v1/cultural-items")
 app.include_router(comments.router, prefix="/api/v1/comments")
 
-# Set up CORS middleware with frontend URL from environment variables
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Fix CORS middleware to allow multiple frontend URLs
+frontend_urls = [
+    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    "http://localhost:3000"  # Backup URL for development
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url],  # Use environment variable instead of hardcoded value
+    allow_origins=frontend_urls,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,14 +128,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    import asyncio
-    
-    # Configure proper signal handling for graceful shutdown
-    config = uvicorn.Config("main:app", host="0.0.0.0", port=8000, reload=True)
-    server = uvicorn.Server(config)
-    
-    # Run the server with proper signal handling
-    try:
-        asyncio.run(server.serve())
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        logging.info("Server shutdown initiated by user")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

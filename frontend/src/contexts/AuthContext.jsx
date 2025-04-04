@@ -1,34 +1,111 @@
-import React, { createContext, useContext } from 'react';
-import authService from '../services/authService';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import useAuthStore from '../stores/authStore';
 
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const { user, isAuthenticated, role } = useAuthStore();
+  const { 
+    user, 
+    isAuthenticated, 
+    isLoading: storeLoading, 
+    error: storeError, 
+    checkAuth,
+    login: storeLogin,
+    logout: storeLogout,
+    register: storeRegister,
+    updateProfile: storeUpdateProfile,
+    changePassword: storeChangePassword
+  } = useAuthStore();
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Initialize authentication state on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        setLoading(true);
+        await checkAuth();
+      } catch (err) {
+        console.error('Authentication initialization failed:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+  }, [checkAuth]);
 
   const login = async (email, password) => {
-    return await authService.login(email, password);
+    try {
+      setLoading(true);
+      setError(null);
+      return await storeLogin({ email, password });
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const logout = () => {
-    authService.logout();
+  const register = async (userData) => {
+    try {
+      setLoading(true);
+      setError(null);
+      return await storeRegister(userData);
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await storeLogout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   const updateProfile = async (userData) => {
-    return await authService.updateUserProfile(userData);
+    try {
+      setLoading(true);
+      setError(null);
+      return await storeUpdateProfile(userData);
+    } catch (err) {
+      setError(err.message || 'Profile update failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const changePassword = async (passwordData) => {
-    return await authService.changePassword(passwordData);
+    try {
+      setLoading(true);
+      setError(null);
+      return await storeChangePassword(passwordData);
+    } catch (err) {
+      setError(err.message || 'Password change failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const value = {
     user,
     isAuthenticated,
-    role,
+    role: user?.role,
+    loading: loading || storeLoading,
+    error: error || storeError,
     login,
     logout,
+    register,
     updateProfile,
     changePassword
   };

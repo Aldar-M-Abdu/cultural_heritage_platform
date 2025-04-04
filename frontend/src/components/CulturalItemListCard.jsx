@@ -6,7 +6,7 @@ const CulturalItemListCard = ({ item }) => {
   const defaultImage = '/placeholder-artifact.jpg';
   
   return (
-    <Link to={`/cultural_items/${item.id}`} className="block hover:shadow-md transition-shadow">
+    <Link to={`/items/${item.id}`} className="block hover:shadow-md transition-shadow">
       <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-100 flex flex-col md:flex-row">
         {/* Item Image - takes up 1/4 of the card on medium screens and up */}
         <div className="md:w-1/4 relative">

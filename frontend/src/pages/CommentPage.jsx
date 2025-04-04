@@ -1,9 +1,59 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import CommentList from '../components/CommentList';
-import commentsService from '../services/commentsService'; // Updated import
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+
+// Local API helper
+const commentsApi = {
+  async request(endpoint, method = 'GET', data = null) {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+    const token = localStorage.getItem('token');
+    
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      credentials: 'include',
+    };
+
+    if (data && method !== 'GET') {
+      options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(`${baseURL}${endpoint}`, options);
+    
+    if (response.status === 401) {
+      window.dispatchEvent(new Event('auth:sessionExpired'));
+      throw new Error('Session expired');
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw errorData;
+    }
+    
+    return response.status !== 204 ? await response.json() : null;
+  },
+
+  getComments: async (itemId) => {
+    return await commentsApi.request(`/api/v1/cultural-items/${itemId}/comments`);
+  },
+
+  addComment: async (commentData) => {
+    return await commentsApi.request('/api/v1/comments', 'POST', commentData);
+  },
+
+  deleteComment: async (commentId) => {
+    return await commentsApi.request(`/api/v1/comments/${commentId}`, 'DELETE');
+  },
+
+  replyToComment: async (commentId, replyData) => {
+    return await commentsApi.request(`/api/v1/comments/${commentId}/replies`, 'POST', replyData);
+  },
+};
 
 const CommentPage = () => {
   const { itemId } = useParams();
@@ -35,7 +85,7 @@ const CommentPage = () => {
     setIsLoading(true);
     try {
       if (itemId) {
-        const data = await commentsService.getComments(itemId);
+        const data = await commentsApi.getComments(itemId);
         setComments(data || []);
       } else {
         // Simulate API for demo purposes
@@ -82,7 +132,7 @@ const CommentPage = () => {
     try {
       if (itemId) {
         // Real API call
-        const newComment = await commentsService.addComment({
+        const newComment = await commentsApi.addComment({
           itemId,
           text: comment,
           userId: currentUser.id
@@ -110,7 +160,7 @@ const CommentPage = () => {
 
   const handleDeleteComment = async (commentId) => {
     try {
-      await commentsService.deleteComment(commentId);
+      await commentsApi.deleteComment(commentId);
       setComments(prev => prev.filter(comment => comment.id !== commentId));
     } catch (err) {
       setError('Failed to delete comment');
@@ -124,7 +174,7 @@ const CommentPage = () => {
     }
     
     try {
-      const newReply = await commentsService.replyToComment(commentId, {
+      const newReply = await commentsApi.replyToComment(commentId, {
         text: replyText,
         userId: currentUser.id
       });
