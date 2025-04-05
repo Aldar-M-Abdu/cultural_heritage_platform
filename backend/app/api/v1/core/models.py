@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from enum import Enum
-from sqlalchemy import Table, Column, ForeignKey, func, String, Text, Boolean, DateTime
+from sqlalchemy import Table, Column, ForeignKey, func, String, Text, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -43,6 +43,11 @@ class CulturalItem(Base):
     # Historical significance
     historical_significance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
+    # Feature flag
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # View tracking
+    view_count: Mapped[int] = mapped_column(default=0)
     
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -53,6 +58,7 @@ class CulturalItem(Base):
     media: Mapped[List["Media"]] = relationship(back_populates="cultural_item")
     comments: Mapped[List["Comment"]] = relationship(back_populates="cultural_item")
     events: Mapped[List["Event"]] = relationship(secondary=event_cultural_item, back_populates="cultural_items")
+    favorites: Mapped[List["UserFavorite"]] = relationship(back_populates="cultural_item")
 
 
 class Tag(Base):
@@ -94,8 +100,15 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
+    # Profile fields
+    first_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
     # Relationships
     tokens: Mapped[List["Token"]] = relationship()
+    favorites: Mapped[List["UserFavorite"]] = relationship(back_populates="user")
+    notifications: Mapped[List["Notification"]] = relationship(back_populates="user")
 
 
 class Token(Base):
@@ -189,3 +202,41 @@ class Item(Base):
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserFavorite(Base):
+    __tablename__ = "user_favorites"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    cultural_item_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('cultural_items.id'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="favorites")
+    cultural_item: Mapped["CulturalItem"] = relationship(back_populates="favorites")
+    
+    # Unique constraint to prevent duplicates
+    __table_args__ = (
+        UniqueConstraint('user_id', 'cultural_item_id', name='unique_user_favorite'),
+    )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    message: Mapped[str] = mapped_column(String(255), nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "comment", "favorite", "system"
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Optional references to related content
+    cultural_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('cultural_items.id'), nullable=True)
+    comment_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('comments.id'), nullable=True)
+    
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="notifications")
+    cultural_item: Mapped[Optional["CulturalItem"]] = relationship("CulturalItem")
+    comment: Mapped[Optional["Comment"]] = relationship("Comment")
