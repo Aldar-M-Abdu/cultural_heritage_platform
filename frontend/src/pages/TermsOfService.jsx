@@ -36,6 +36,41 @@ const TermsOfService = () => {
 
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 border-b border-gray-200 pb-2">
+                    User Responsibilities
+                  </h2>
+                  <p className="mt-4 text-gray-600">
+                    As a user of our platform, you are responsible for:
+                  </p>
+                  <ul className="mt-4 space-y-2">
+                    <li className="flex items-start">
+                      <span className="flex-shrink-0 h-6 w-6 text-blue-600 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span className="text-gray-600">Maintaining the security and confidentiality of your account credentials.</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="flex-shrink-0 h-6 w-6 text-blue-600 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span className="text-gray-600">Ensuring that all content you upload respects intellectual property rights and is culturally appropriate.</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="flex-shrink-0 h-6 w-6 text-blue-600 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span className="text-gray-600">Complying with all applicable laws and regulations when using our services.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 border-b border-gray-200 pb-2">
                     Your Content
                   </h2>
                   <p className="mt-4 text-gray-600">
@@ -44,6 +79,23 @@ const TermsOfService = () => {
                   <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                     <p className="text-blue-800">
                       The license you grant is for the limited purpose of operating, promoting, and improving our services, and to develop new ones.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 border-b border-gray-200 pb-2">
+                    Intellectual Property Rights
+                  </h2>
+                  <p className="mt-4 text-gray-600">
+                    All intellectual property rights in the services and their content (excluding your content) belong to us or our licensors. You may not use, reproduce, modify, or distribute any of our content without our explicit permission.
+                  </p>
+                  <p className="mt-2 text-gray-600">
+                    When sharing content related to cultural heritage, it is essential to respect the intellectual property rights of the original creators and the cultural context of the materials.
+                  </p>
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                    <p className="text-blue-800 font-medium">
+                      Our platform respects and protects both copyright and traditional cultural expressions.
                     </p>
                   </div>
                 </div>
@@ -82,6 +134,36 @@ const TermsOfService = () => {
                   <p className="mt-2 text-gray-600">
                     To the extent permitted by law, the total liability of us and our suppliers and distributors, for any claims under these terms, including for any implied warranties, is limited to the amount you paid us to use the services.
                   </p>
+                </div>
+
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 border-b border-gray-200 pb-2">
+                    Dispute Resolution
+                  </h2>
+                  <p className="mt-4 text-gray-600">
+                    If a dispute arises between you and our platform, we aim to resolve it efficiently and amicably. Please contact our support team first to attempt to resolve any issues.
+                  </p>
+                  <p className="mt-2 text-gray-600">
+                    For any formal legal disputes, you agree that:
+                  </p>
+                  <ul className="mt-4 space-y-2">
+                    <li className="flex items-start">
+                      <span className="flex-shrink-0 h-6 w-6 text-blue-600 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span className="text-gray-600">All disputes will be governed by the laws of [Your Jurisdiction].</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="flex-shrink-0 h-6 w-6 text-blue-600 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span className="text-gray-600">Before initiating any formal legal proceeding, you'll attempt to resolve the dispute through mediation.</span>
+                    </li>
+                  </ul>
                 </div>
 
                 <div>

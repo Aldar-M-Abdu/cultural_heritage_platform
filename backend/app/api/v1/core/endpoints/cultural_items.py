@@ -34,8 +34,8 @@ import random
 # Fix: Remove duplicate API prefix
 router = APIRouter(tags=["cultural_items"])
 
-@router.get("", response_model=List[CulturalItem], operation_id="list_all_cultural_items")
-@router.get("/", response_model=List[CulturalItem], operation_id="list_all_cultural_items_alt")
+@router.get("", response_model=List[CulturalItem], operation_id="list_cultural_items")
+@router.get("/", response_model=List[CulturalItem], operation_id="list_cultural_items_alt")
 def read_cultural_items(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(12, ge=1, le=100, description="Number of items per page"),
@@ -64,7 +64,7 @@ def read_cultural_items(
     else:  # default to created_at
         return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
-@router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items_main")
+@router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items")
 def search_items(
     query: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -94,7 +94,7 @@ def search_items(
     else:  # default to created_at
         return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
-@router.get("/random", response_model=List[CulturalItem], operation_id="get_random_cultural_items")
+@router.get("/random", response_model=List[CulturalItem], operation_id="get_random_items")
 def get_random_cultural_items(
     count: int = Query(5, ge=1, le=20, description="Number of random items to return"),
     db: Session = Depends(get_db),
@@ -107,7 +107,7 @@ def get_random_cultural_items(
         return all_items
     return random.sample(all_items, count)
 
-@router.get("/tags", response_model=List[Tag], operation_id="list_all_tags")
+@router.get("/tags", response_model=List[Tag], operation_id="list_tags")
 def read_tags(
     skip: int = 0,
     limit: int = 100,
@@ -115,7 +115,7 @@ def read_tags(
 ) -> List[Tag]:
     return get_all_tags(db, skip=skip, limit=limit)
 
-@router.get("/tags/{tag_name}", response_model=List[CulturalItem], operation_id="get_items_by_specific_tag")
+@router.get("/tags/{tag_name}", response_model=List[CulturalItem], operation_id="get_items_by_tag")
 def read_cultural_items_by_tag(
     tag_name: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -145,7 +145,7 @@ def read_cultural_items_by_tag(
     else:  # default to created_at
         return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
-@router.get("/regions/{region}", response_model=List[CulturalItem], operation_id="get_items_by_specific_region")
+@router.get("/regions/{region}", response_model=List[CulturalItem], operation_id="get_items_by_region")
 def read_cultural_items_by_region(
     region: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -159,7 +159,7 @@ def read_cultural_items_by_region(
         items = [item for item in items if item.is_featured == is_featured]
     return sorted(items, key=lambda x: x.created_at, reverse=True)
 
-@router.get("/time-periods/{time_period}", response_model=List[CulturalItem], operation_id="get_items_by_specific_period")
+@router.get("/time-periods/{time_period}", response_model=List[CulturalItem], operation_id="get_items_by_time_period")
 def read_cultural_items_by_time_period(
     time_period: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -173,7 +173,7 @@ def read_cultural_items_by_time_period(
         items = [item for item in items if item.is_featured == is_featured]
     return sorted(items, key=lambda x: x.created_at, reverse=True)
 
-@router.get("/featured", response_model=List[CulturalItem], operation_id="get_featured_cultural_items_main")
+@router.get("/featured", response_model=List[CulturalItem], operation_id="get_featured_items")
 def read_featured_cultural_items(
     db: Session = Depends(get_db),
 ) -> List[CulturalItem]:
@@ -183,7 +183,7 @@ def read_featured_cultural_items(
     items = get_featured_cultural_items(db)
     return items
 
-@router.get("/{cultural_item_id}", response_model=CulturalItemDetail, operation_id="get_cultural_item_by_id")
+@router.get("/{cultural_item_id}", response_model=CulturalItemDetail, operation_id="get_cultural_item")
 def read_cultural_item(
     cultural_item_id: UUID,
     db: Session = Depends(get_db),
@@ -196,7 +196,7 @@ def read_cultural_item(
         )
     return db_item
 
-@router.post("/", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_new_cultural_item_main")
+@router.post("/", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_cultural_item")
 def create_new_cultural_item(
     item: CulturalItemCreate,
     db: Session = Depends(get_db),
@@ -204,7 +204,7 @@ def create_new_cultural_item(
 ) -> CulturalItem:
     return create_cultural_item(db=db, item=item)
 
-@router.post("/media", response_model=Media, status_code=status.HTTP_201_CREATED, operation_id="upload_new_media")
+@router.post("/media", response_model=Media, status_code=status.HTTP_201_CREATED, operation_id="upload_media")
 def create_new_media(
     media: MediaCreate,
     db: Session = Depends(get_db),
@@ -217,7 +217,7 @@ def create_new_media(
     # Create media using the appropriate model structure
     return create_media(db=db, media=media)
 
-@router.put("/{cultural_item_id}", response_model=CulturalItem, operation_id="update_cultural_item_main")
+@router.put("/{cultural_item_id}", response_model=CulturalItem, operation_id="update_cultural_item")
 def update_item(
     cultural_item_id: UUID,
     item: CulturalItemUpdate,
@@ -229,7 +229,7 @@ def update_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cultural item not found")
     return db_item
 
-@router.delete("/{cultural_item_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_cultural_item_main")
+@router.delete("/{cultural_item_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_cultural_item")
 def delete_item(
     cultural_item_id: UUID,
     db: Session = Depends(get_db),

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { ToastProvider } from './contexts/ToastContext';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,6 +23,14 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import UserSettingsPage from './pages/UserSettingsPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import PressPage from './pages/PressPage';
+import TermsOfService from './pages/TermsOfService';
+import ExamplePage from './pages/ExamplePage';
+import CommunityPage from './pages/CommunityPage';
+import ContributorsPage from './pages/ContributorsPage';
+import ExhibitionsPage from './pages/ExhibitionsPage';
+import TimelinePage from './pages/TimelinePage';
+import FAQPage from './pages/FAQPage';
 import useAuthStore from './stores/authStore';
 
 const API_BASE_URL = 'http://localhost:8000'; // Ensure this matches the backend URL
@@ -64,7 +73,7 @@ function App() {
   }, []);
 
   return (
-    <>
+    <ToastProvider>
       <ScrollToTop />
       <div className="min-h-screen flex flex-col">
         <Navigation />
@@ -86,6 +95,16 @@ function App() {
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/forgot-password" element={<PasswordResetRequestPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/press" element={<PressPage />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/examples" element={<ExamplePage />} />
+            
+            {/* New routes for the additional pages */}
+            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/contributors" element={<ContributorsPage />} />
+            <Route path="/exhibitions" element={<ExhibitionsPage />} />
+            <Route path="/timeline" element={<TimelinePage />} />
+            <Route path="/faq" element={<FAQPage />} />
             
             {/* Protected routes */}
             <Route path="/profile" element={
@@ -120,7 +139,7 @@ function App() {
         
         <Footer />
       </div>
-    </>
+    </ToastProvider>
   );
 }
 
