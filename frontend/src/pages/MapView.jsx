@@ -5,40 +5,6 @@ import 'leaflet/dist/leaflet.css';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import L from "leaflet";
 
-// Local API helper
-const itemsApi = {
-  async request(endpoint, method = 'GET', data = null) {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('token');
-    
-    const options = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
-      credentials: 'include',
-    };
-
-    if (data && method !== 'GET') {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${baseURL}${endpoint}`, options);
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw errorData;
-    }
-    
-    return response.status !== 204 ? await response.json() : null;
-  },
-
-  getItems: async () => {
-    return await itemsApi.request(`/api/v1/items?coordinates=true`);
-  }
-};
-
 // Custom marker icon
 const defaultIcon = new L.Icon({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
@@ -54,7 +20,7 @@ L.Marker.prototype.options.icon = defaultIcon;
 const MapView = () => {
   const [activeItem, setActiveItem] = useState(null);
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
   // Fetch real items from the API
@@ -87,8 +53,9 @@ const MapView = () => {
           console.error("Failed to fetch items:", err);
           setError("Failed to load items. Please try again later.");
         }
+        setItems([]);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 

@@ -15,7 +15,7 @@ from app.security import (
     hash_password,
     verify_password,
 )
-from fastapi import APIRouter, Depends, Form, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Response, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -30,7 +30,10 @@ def login(
 ) -> TokenSchema:
     user = (
         db.execute(
-            select(User).where(User.username == form_data.username),
+            select(User).where(
+                # Check both username and email fields
+                (User.username == form_data.username) | (User.email == form_data.username)
+            )
         )
         .scalars()
         .first()
@@ -53,7 +56,10 @@ def login_alternate(
 ) -> TokenSchema:
     user = (
         db.execute(
-            select(User).where(User.username == username),
+            select(User).where(
+                # Check both username and email fields
+                (User.username == username) | (User.email == username)
+            )
         )
         .scalars()
         .first()
@@ -79,31 +85,71 @@ def logout(
 
 
 @router.post("/register", response_model=UserOutSchema, status_code=status.HTTP_201_CREATED, operation_id="register_user")
-def register_user(
-    user: UserRegisterSchema, db: Session = Depends(get_db)
+async def register_user(
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    full_name: str = Form(None),
+    profile_image: UploadFile = File(None),
+    db: Session = Depends(get_db)
 ) -> UserOutSchema:
-    if db.execute(select(User).where(User.email == user.email)).scalars().first():
+    # Check if email already exists
+    if db.execute(select(User).where(User.email == email)).scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email is already registered",
         )
-    if db.execute(select(User).where(User.username == user.username)).scalars().first():
+    
+    # Check if username already exists
+    if db.execute(select(User).where(User.username == username)).scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username is already taken",
         )
-
-    hashed_password = hash_password(user.password)
+    
+    # Create new user
+    hashed_password = hash_password(password)
     new_user = User(
-        username=user.username,
-        email=user.email,
-        full_name=f"{user.first_name} {user.last_name}".strip(),
+        username=username,
+        email=email,
+        full_name=full_name,
         hashed_password=hashed_password,
     )
 
+    # Add user to database
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    # Handle profile image if provided
+    if profile_image:
+        try:
+            # Create the directory if it doesn't exist
+            from pathlib import Path
+            UPLOAD_DIR = Path("static/profile_images")
+            UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            
+            # Save the file
+            file_extension = profile_image.filename.split(".")[-1]
+            new_filename = f"{new_user.id}_{profile_image.filename}"
+            file_path = UPLOAD_DIR / new_filename
+            
+            with open(file_path, "wb") as buffer:
+                contents = await profile_image.read()
+                buffer.write(contents)
+            
+            # Update user with profile image path
+            image_url = f"/static/profile_images/{new_filename}"
+            new_user.profile_image = image_url
+            db.commit()
+            db.refresh(new_user)
+        except Exception as e:
+            # Log error but don't fail the registration
+            print(f"Error saving profile image: {e}")
+    
+    # Also generate and return a token for immediate login
+    access_token = create_database_token(user_id=new_user.id, db=db)
+    
     return new_user
 
 
@@ -121,7 +167,7 @@ def update_user(
     
     if not current_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
+    
     user_data = user.model_dump(exclude_unset=True, exclude={"password"})
     
     # Handle first_name and last_name if provided
@@ -132,17 +178,16 @@ def update_user(
             current_name_parts = (current_user.full_name or "").split(" ", 1)
             current_first = current_name_parts[0] if current_name_parts else ""
             current_last = current_name_parts[1] if len(current_name_parts) > 1 else ""
-            
             new_first = first_name if first_name else current_first
             new_last = last_name if last_name else current_last
             
             current_user.full_name = f"{new_first} {new_last}".strip()
-            
+    
     # Update the rest of the fields
     for key, value in user_data.items():
         if hasattr(current_user, key):
             setattr(current_user, key, value)
-            
+    
     # Handle password separately
     if hasattr(user, "password") and user.password:
         current_user.hashed_password = hash_password(user.password)
@@ -264,14 +309,17 @@ def get_current_user(
         .scalars()
         .first()
     )
+    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
+    
     return user

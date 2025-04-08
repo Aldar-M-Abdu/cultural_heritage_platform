@@ -24,6 +24,7 @@ const PasswordResetRequestForm = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSuccess(""); // Reset success message
+    setEmailError(""); // Clear email validation errors
 
     // Validate email before proceeding
     if (!validateEmail()) {
@@ -35,8 +36,20 @@ const PasswordResetRequestForm = () => {
       setSuccess("Password reset link has been sent to your email");
       setEmail(""); // Clear the email field
     } catch (error) {
-      // Error handling is done by the store
+      // If there was a specific error about the email not being found
+      if (error.message?.toLowerCase().includes("email") || 
+          error.message?.toLowerCase().includes("not found") ||
+          error.message?.toLowerCase().includes("user")) {
+        setEmailError(error.message || "Email address not found in our system.");
+      }
+      // Error handling is done by the store for other errors
     }
+  };
+
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value);
+    // Clear errors when user types
+    setEmailError("");
   };
 
   return (
@@ -55,10 +68,13 @@ const PasswordResetRequestForm = () => {
                 type="email"
                 id="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={handleEmailChange}
                 onBlur={validateEmail}
-                className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className={`block w-full px-3 py-2 placeholder-gray-400 border ${
+                  emailError ? "border-red-300" : "border-gray-300"
+                } rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 disabled={isLoading}
+                placeholder="Enter your email address"
               />
               {emailError && (
                 <p className="mt-2 text-sm text-red-600">{emailError}</p>

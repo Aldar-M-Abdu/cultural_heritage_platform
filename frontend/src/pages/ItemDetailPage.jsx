@@ -3,75 +3,35 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import useAuthStore from '../stores/authStore';
 import CulturalItemCard from '../components/CulturalItemCard';
-
-// Local API helper
-const itemsApi = {
-  async request(endpoint, method = 'GET', data = null) {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('token');
-    
-    const options = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
-      credentials: 'include',
-    };
-
-    if (data && method !== 'GET') {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${baseURL}${endpoint}`, options);
-    
-    if (response.status === 401) {
-      window.dispatchEvent(new Event('auth:sessionExpired'));
-      throw new Error('Session expired');
-    }
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw errorData;
-    }
-    
-    return response.status !== 204 ? await response.json() : null;
-  },
-
-  getItemById: async (id) => {
-    return await itemsApi.request(`/api/v1/cultural-items/${id}`);
-  },
-
-  getItems: async (params = {}) => {
-    const filteredParams = Object.fromEntries(
-      Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
-    );
-    const query = new URLSearchParams(filteredParams).toString();
-    return await itemsApi.request(`/api/v1/cultural-items?${query}`);
-  },
-
-  deleteItem: async (id) => {
-    return await itemsApi.request(`/api/v1/cultural-items/${id}`, 'DELETE');
-  }
-};
+import useToast from '../hooks/useToast';
 
 const ItemDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuthStore();
+  const { toast } = useToast();
   const [item, setItem] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [relatedItems, setRelatedItems] = useState([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
 
   // Fetch item data when component mounts
   useEffect(() => {
     const fetchItemData = async () => {
       setIsLoading(true);
       try {
-        const itemData = await itemsApi.getItemById(id);
+        // API call to fetch item by ID
+        const response = await fetch(`/api/v1/cultural-items/${id}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch item');
+        }
+        
+        const itemData = await response.json();
+        
         // Map cultural item fields to expected format
         const mappedItem = {
           ...itemData,
@@ -95,20 +55,38 @@ const ItemDetailPage = () => {
         // Also fetch related items
         if (itemData) {
           try {
-            const related = await itemsApi.getItems({
-              region: itemData.region,
-              limit: 3,
-              excludeId: id
-            });
-            setRelatedItems(Array.isArray(related) ? related : related.items || []);
+            // API call to fetch related items
+            const relatedResponse = await fetch(`/api/v1/cultural-items?region=${encodeURIComponent(itemData.region)}&limit=3&exclude=${id}`);
+            if (relatedResponse.ok) {
+              const related = await relatedResponse.json();
+              setRelatedItems(Array.isArray(related) ? related : related.items || []);
+            } else {
+              console.log('Error response:', await relatedResponse.text());
+              console.error('Failed to fetch related items:', relatedResponse.status);
+            }
           } catch (relatedError) {
             console.error('Error fetching related items:', relatedError);
             // Don't set error state - we can still show the main item
           }
         }
+        
+        // Check if item is in user's favorites
+        if (isAuthenticated) {
+          try {
+            const favoriteResponse = await fetch(`/api/v1/user-favorites/${id}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              }
+            });
+            setIsFavorite(favoriteResponse.ok);
+          } catch (favoriteError) {
+            console.error('Error checking favorite status:', favoriteError);
+            // Don't affect the main functionality
+          }
+        }
       } catch (err) {
         setError('Failed to load item. It may have been removed or you may not have permission to view it.');
-        console.error('Error fetching item:', err);
+        console.error('Error in item data fetch:', err);
       } finally {
         setIsLoading(false);
       }
@@ -120,7 +98,7 @@ const ItemDetailPage = () => {
       setError('Invalid item ID');
       setIsLoading(false);
     }
-  }, [id, user]);
+  }, [id, user, isAuthenticated]);
 
   const handleDeleteItem = async () => {
     if (!window.confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
@@ -128,11 +106,59 @@ const ItemDetailPage = () => {
     }
     
     try {
-      await itemsApi.deleteItem(id);
+      const response = await fetch(`/api/v1/cultural-items/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete item');
+      }
+      
       navigate('/items', { replace: true });
     } catch (err) {
       alert('Failed to delete item. Please try again.');
-      console.error('Error deleting item:', err);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!isAuthenticated) {
+      navigate('/login?redirect=' + encodeURIComponent(`/items/${id}`));
+      return;
+    }
+    
+    setIsFavoriteLoading(true);
+    try {
+      if (isFavorite) {
+        // Remove from favorites
+        await fetch(`/api/v1/user-favorites/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+      } else {
+        // Add to favorites
+        await fetch('/api/v1/user-favorites/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ cultural_item_id: id })
+        });
+      }
+      
+      // Update the UI state
+      setIsFavorite(!isFavorite);
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+      // Show error message to user
+      alert(isFavorite ? 'Failed to remove from favorites' : 'Failed to add to favorites');
+    } finally {
+      setIsFavoriteLoading(false);
     }
   };
 
@@ -251,18 +277,38 @@ const ItemDetailPage = () => {
 
             {/* Item actions (add to collection, share, etc.) */}
             <div className="flex space-x-2 pt-2">
-              <button className="flex items-center space-x-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-                </svg>
-                <span>Save to Favorites</span>
+              <button 
+                onClick={handleToggleFavorite}
+                disabled={isFavoriteLoading}
+                className={`flex items-center space-x-1 ${
+                  isFavorite 
+                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300' 
+                    : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300'
+                } px-4 py-2 rounded-md text-sm font-medium transition-colors`}
+              >
+                {isFavoriteLoading ? (
+                  <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" 
+                    className={`h-5 w-5 ${isFavorite ? 'fill-amber-500 stroke-amber-500' : 'stroke-current fill-none'}`}
+                    viewBox="0 0 24 24" strokeWidth={1.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+                  </svg>
+                )}
+                <span>{isFavorite ? 'Saved to Favorites' : 'Save to Favorites'}</span>
               </button>
+              
               <button className="flex items-center space-x-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
                 </svg>
                 <span>Share</span>
               </button>
+              
               <Link to={`/items/${id}/comments`} className="flex items-center space-x-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-4 py-2 rounded-md text-sm font-medium transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />

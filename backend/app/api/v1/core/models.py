@@ -101,9 +101,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     # Profile fields
-    first_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    last_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    profile_image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Added profile image field
     
     # Relationships
     tokens: Mapped[List["Token"]] = relationship()
@@ -191,17 +190,6 @@ class Event(Base):
     
     # Relationships
     cultural_items: Mapped[List["CulturalItem"]] = relationship(secondary=event_cultural_item, back_populates="events")
-
-
-class Item(Base):
-    __tablename__ = "items"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class UserFavorite(Base):

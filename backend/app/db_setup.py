@@ -9,7 +9,8 @@ from dotenv import load_dotenv  # Add this import
 # Load environment variables from .env file
 load_dotenv()  # Add this line
 
-from app.api.v1.core.models import Base
+# Create Base class for models
+Base = declarative_base()
 
 # Get DB URL from environment variable
 DATABASE_URL = os.getenv("DB_URL")
@@ -38,7 +39,9 @@ def is_db_connected():
 def init_db():
     """Initialize the database with tables"""
     try:
-        Base.metadata.create_all(bind=engine)
+        # Import here to avoid circular imports
+        from app.api.v1.core.models import Base as ModelsBase
+        ModelsBase.metadata.create_all(bind=engine)
         logging.info("Database tables created successfully")
     except Exception as e:
         logging.error(f"Database initialization failed: {str(e)}")

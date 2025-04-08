@@ -32,8 +32,9 @@ const LoginPage = () => {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMessage('');
+    setErrorMessage(''); // Clear previous error messages
     
+    // Client-side validation
     if (!email) {
       setErrorMessage('Email is required');
       return;
@@ -48,8 +49,38 @@ const LoginPage = () => {
       await login({ email, password, rememberMe });
       // The useEffect above will handle redirection on successful login
     } catch (err) {
-      // Error handling is managed by the auth store
-      // The useEffect will update errorMessage with error from store
+      // Provide more specific error messages based on error type
+      if (err.message?.toLowerCase().includes('network') || 
+          err.message?.toLowerCase().includes('connection') ||
+          err.status === 'network_error') {
+        setErrorMessage('Network error. Please check your internet connection and try again.');
+      } else if (err.message?.toLowerCase().includes('not found') || 
+                err.message?.toLowerCase().includes('invalid') || 
+                err.message?.toLowerCase().includes('incorrect') ||
+                err.status === 401) {
+        setErrorMessage('Invalid email or password. Please try again.');
+      } else {
+        setErrorMessage(err.message || 'Login failed. Please try again.');
+      }
+      
+      // Improved error logging with proper status extraction
+      const status = err.status || 
+                     err.response?.status || 
+                     (err.originalError?.response?.status) || 
+                     'unknown';
+                     
+      console.error('Login error details:', { 
+        message: err.message, 
+        status: status
+      });
+    }
+  };
+
+  const handleInputChange = (setter) => (e) => {
+    setter(e.target.value);
+    // Only clear error when user starts typing after an error
+    if (errorMessage) {
+      setErrorMessage('');
     }
   };
   
@@ -93,7 +124,7 @@ const LoginPage = () => {
                   autoComplete="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleInputChange(setEmail)}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
               </div>
@@ -111,7 +142,7 @@ const LoginPage = () => {
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handleInputChange(setPassword)}
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
               </div>

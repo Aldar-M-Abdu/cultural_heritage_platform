@@ -2,7 +2,8 @@ import React from "react";
 import { Link } from "react-router-dom";
 import ResetPasswordForm from "../components/ResetPasswordForm";
 
-const ResetPasswordPage = () => {
+// Renamed component from ResetPasswordPage to ResetConfirmationPage to avoid naming conflict
+const ResetConfirmationPage = () => {
   return (
     <div className="flex flex-col justify-center min-h-screen py-12 bg-gray-50 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -32,4 +33,4 @@ const ResetPasswordPage = () => {
   );
 };
 
-export default ResetPasswordPage;
+export default ResetConfirmationPage;

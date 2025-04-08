@@ -1,13 +1,15 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.api.v1.core.models import (
     CulturalItem,
     Tag,
     Media,
     cultural_item_tag,
+    Category,
+    Event,
 )
 from app.api.v1.core.schemas import (
     CulturalItemCreate,
@@ -112,10 +114,81 @@ def update_cultural_item(db: Session, cultural_item_id: UUID, item: CulturalItem
     return db_item
 
 def delete_cultural_item(db: Session, cultural_item_id: UUID) -> bool:
-    db_item = get_cultural_item(db, cultural_item_id)
+    db_item = get_cultural_item(db, cultural_item_id=cultural_item_id)
     if not db_item:
         return False
     
     db.delete(db_item)
     db.commit()
     return True
+
+def get_data_source_statistics(db: Session) -> dict:
+    """Get statistics about data sources in the database"""
+    total_items = db.query(func.count(CulturalItem.id)).scalar()
+    
+    # Count items that likely came from Getty (based on URL pattern)
+    getty_items = db.query(func.count(CulturalItem.id)).filter(
+        CulturalItem.image_url.like('%getty.edu%')
+    ).scalar()
+    
+    # Count mock/other items
+    other_items = total_items - getty_items
+    
+    return {
+        "total_items": total_items,
+        "getty_items": getty_items,
+        "other_items": other_items
+    }
+
+def get_cultural_items_by_source(db: Session, source: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
+    """Get cultural items filtered by their data source"""
+    if source.lower() == 'getty':
+        return db.query(CulturalItem).filter(
+            CulturalItem.image_url.like('%getty.edu%')
+        ).offset(skip).limit(limit).all()
+    elif source.lower() == 'mock':
+        return db.query(CulturalItem).filter(
+            ~CulturalItem.image_url.like('%getty.edu%')
+        ).offset(skip).limit(limit).all()
+    else:
+        return get_cultural_items(db, skip, limit)
+
+def get_all_categories(db: Session, skip: int = 0, limit: int = 100) -> List[Category]:
+    """Get all blog post categories"""
+    return db.query(Category).offset(skip).limit(limit).all()
+
+def get_category(db: Session, category_id: UUID) -> Optional[Category]:
+    """Get a specific category by ID"""
+    return db.query(Category).filter(Category.id == category_id).first()
+
+def get_category_by_name(db: Session, name: str) -> Optional[Category]:
+    """Get a specific category by name"""
+    return db.query(Category).filter(Category.name == name).first()
+
+def create_category(db: Session, name: str) -> Category:
+    """Create a new blog post category"""
+    db_category = Category(name=name)
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    return db_category
+
+def get_all_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
+    """Get all events"""
+    return db.query(Event).offset(skip).limit(limit).all()
+
+def get_event(db: Session, event_id: UUID) -> Optional[Event]:
+    """Get a specific event by ID"""
+    return db.query(Event).filter(Event.id == event_id).first()
+
+def get_upcoming_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
+    """Get upcoming events (where start_date is in the future)"""
+    from datetime import datetime
+    now = datetime.utcnow()
+    return db.query(Event).filter(Event.start_date > now).order_by(Event.start_date).offset(skip).limit(limit).all()
+
+def get_past_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
+    """Get past events (where start_date is in the past)"""
+    from datetime import datetime
+    now = datetime.utcnow()
+    return db.query(Event).filter(Event.start_date <= now).order_by(Event.start_date.desc()).offset(skip).limit(limit).all()

@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import CulturalItemCard from '../components/CulturalItemCard';
+
+// Use fallback images in case the originals don't load
+const fallbackImage = "https://images.unsplash.com/photo-1608412759225-8cb7f42eb7fb?auto=format&fit=crop&q=80";
 
 const staticData = {
   data: [
@@ -34,13 +37,31 @@ const staticData = {
 };
 
 const ExplorePage = () => {
+  const [items, setItems] = useState(staticData.data);
+
+  // Add image error handling to each item
+  useEffect(() => {
+    const itemsWithFallback = staticData.data.map(item => ({
+      ...item,
+      handleImageError: (e) => {
+        e.target.onerror = null;
+        e.target.src = fallbackImage;
+      }
+    }));
+    setItems(itemsWithFallback);
+  }, []);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Explore Cultural Heritage</h1>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {staticData.data.map((item) => (
-          <CulturalItemCard key={item.id} item={item} />
+        {items.map((item) => (
+          <CulturalItemCard 
+            key={item.id} 
+            item={item}
+            onImageError={item.handleImageError}
+          />
         ))}
       </div>
     </div>

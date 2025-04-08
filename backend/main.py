@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles  # Add this import
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from app.api.v1.routers import router
@@ -101,6 +102,15 @@ async def redirect_trailing_slash(request, call_next):
     if not request.url.path.endswith("/") and request.url.path != "/":
         return RedirectResponse(url=f"{request.url.path}/", status_code=307)
     return await call_next(request)
+
+# Create static directory if it doesn't exist
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(static_dir):
+    logging.info(f"Creating static directory at: {static_dir}")
+    os.makedirs(static_dir)
+
+# Mount static files directory for serving user uploads
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Include API router with all endpoints
 app.include_router(router, prefix="/api/v1")

@@ -14,7 +14,8 @@ export const AuthProvider = ({ children }) => {
     logout: storeLogout,
     register: storeRegister,
     updateProfile: storeUpdateProfile,
-    changePassword: storeChangePassword
+    changePassword: storeChangePassword,
+    fetchUser
   } = useAuthStore();
   
   const [loading, setLoading] = useState(true);
@@ -37,14 +38,40 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [checkAuth]);
 
-  const login = async (email, password) => {
+  const login = async (credentials) => {
     try {
       setLoading(true);
       setError(null);
-      return await storeLogin({ email, password });
+      return await storeLogin(credentials);
     } catch (err) {
-      setError(err.message || 'Login failed');
-      throw err;
+      // Format the error message consistently
+      const errorMessage = err.response?.data?.detail || 
+                          err.response?.data?.message || 
+                          err.message || 
+                          'Login failed';
+      
+      setError(errorMessage);
+      
+      // Add better error classification for logging
+      if (err.response?.status === 401) {
+        console.error('Authentication error: Invalid credentials', { status: err.response.status });
+      } else if (err.response?.status === 404) {
+        console.error('User not found error', { status: err.response.status });
+      } else if (!err.response && err.message) {
+        console.error('Network error during login:', err.message);
+      } else {
+        console.error('Unexpected login error:', err);
+      }
+      
+      // Ensure we always have status in error objects we throw
+      const errorStatus = err.status || 
+                          err.response?.status || 
+                          (err.name === 'TypeError' ? 'network_error' : 'unknown');
+      
+      throw Object.assign(new Error(errorMessage), { 
+        originalError: err,
+        status: errorStatus
+      });
     } finally {
       setLoading(false);
     }
@@ -107,7 +134,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     register,
     updateProfile,
-    changePassword
+    changePassword,
+    fetchUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

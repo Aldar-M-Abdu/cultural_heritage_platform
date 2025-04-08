@@ -16,13 +16,14 @@ import CreateItemPage from './pages/CreateItemPage';
 import AboutPage from './pages/AboutPage';
 import AccessibilityPage from './pages/AccessibilityPage';
 import BlogPage from './pages/BlogPage';
+import NotificationsPage from './pages/NotificationsPage';
 import ContactPage from './pages/ContactPage';
 import ExplorePage from './pages/ExplorePage';
 import MapView from './pages/MapView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-import UserSettingsPage from './pages/UserSettingsPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import ResetConfirmationPage from './pages/ResetConfirmationPage';
 import PressPage from './pages/PressPage';
 import TermsOfService from './pages/TermsOfService';
 import ExamplePage from './pages/ExamplePage';
@@ -52,6 +53,7 @@ function App() {
   // Check authentication state when app loads
   useEffect(() => {
     if (token) {
+      // Now checkAuth is properly defined
       checkAuth().catch(error => {
         console.error('Failed to fetch user data:', error);
       });
@@ -72,11 +74,49 @@ function App() {
     };
   }, []);
 
+  // Add API request/response logging for debugging
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, options = {}) {
+      // Only log authentication-related requests
+      if (url.includes('/auth/')) {
+        console.log('API Request:', { url, method: options.method || 'GET' });
+        
+        // For debugging only - don't log credentials in production
+        if (process.env.NODE_ENV !== 'production' && options.body instanceof FormData) {
+          console.log('Request FormData contains:', 
+            [...options.body.entries()].map(([key, value]) => 
+              key === 'password' ? { key, value: '***' } : { key, value: 
+                value instanceof File ? `File: ${value.name}` : value }
+            )
+          );
+        }
+      }
+      
+      try {
+        const response = await originalFetch(url, options);
+        
+        if (url.includes('/auth/')) {
+          console.log('API Response:', { 
+            url, 
+            status: response.status, 
+            statusText: response.statusText,
+          });
+        }
+        
+        return response.clone();
+      } catch (error) {
+        console.error('API Request failed:', { url, error });
+        throw error;
+      }
+    };
+  }, []);
+
   return (
     <ToastProvider>
-      <ScrollToTop />
       <div className="min-h-screen flex flex-col">
         <Navigation />
+        <ScrollToTop />
         
         <main className="flex-grow">
           <Routes>
@@ -89,12 +129,14 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/accessibility" element={<AccessibilityPage />} />
             <Route path="/blog" element={<BlogPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/map" element={<MapView />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/forgot-password" element={<PasswordResetRequestPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/reset-confirmation" element={<ResetConfirmationPage />} />
             <Route path="/press" element={<PressPage />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/examples" element={<ExamplePage />} />
@@ -110,11 +152,6 @@ function App() {
             <Route path="/profile" element={
               <ProtectedRoute fallback="/login">
                 <ProfilePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute fallback="/login">
-                <UserSettingsPage />
               </ProtectedRoute>
             } />
             <Route path="/items/new" element={

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str
     SECRET_KEY: str
     ALGORITHM: str
+    
+    # Add Smithsonian API key field
+    SMITHSONIAN_API_KEY: str = ""  # Default to empty string
 
     model_config = SettingsConfigDict(env_file=".env")
 

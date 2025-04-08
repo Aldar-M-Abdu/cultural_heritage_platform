@@ -344,26 +344,39 @@ class NotificationCreateSchema(BaseModel):
     message: str = Field(..., max_length=255)
 
 
-### ITEM SCHEMAS (GENERIC)
-class ItemBase(BaseModel):
-    name: str
-    description: Optional[str] = None
+class NotificationUpdate(BaseModel):
+    is_read: bool = Field(...)
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"is_read": True}}
+    )
 
 
-class ItemCreate(ItemBase):
-    pass
-
-
-class ItemUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
+class NotificationResponse(BaseModel):
+    id: UUID
+    message: str
+    notification_type: str
+    is_read: bool
+    created_at: datetime
+    cultural_item_id: Optional[UUID] = None
+    comment_id: Optional[UUID] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
 
-class Item(ItemBase):
-    id: int
-    owner_id: Optional[UUID] = None
+### USER FAVORITE SCHEMAS
+class UserFavoriteBase(BaseModel):
+    cultural_item_id: UUID
+
+
+class UserFavoriteCreate(UserFavoriteBase):
+    pass
+
+
+class UserFavorite(UserFavoriteBase):
+    id: UUID
+    user_id: UUID
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -374,3 +387,46 @@ class PasswordResetRequestSchema(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={"example": {"email": "user@example.com"}}
     )
+
+
+### BLOG POST SCHEMAS
+class BlogPostBase(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    content: str = Field(..., min_length=10)
+    category_id: UUID
+
+
+class BlogPostCreate(BlogPostBase):
+    pass
+
+
+class BlogPostUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=255)
+    content: Optional[str] = Field(None, min_length=10)
+    category_id: Optional[UUID] = None
+
+
+class BlogAuthor(BaseModel):
+    id: UUID
+    username: str
+    full_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryResponse(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BlogPostResponse(BlogPostBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    author_id: UUID
+    category: CategoryResponse
+    author: BlogAuthor
+
+    model_config = ConfigDict(from_attributes=True)

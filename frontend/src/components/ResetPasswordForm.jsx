@@ -50,6 +50,7 @@ const ResetPasswordForm = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSuccess(""); // Reset success message
+    setTokenError(""); // Reset token error
 
     // Validate inputs before proceeding
     const isPasswordValid = validatePassword();
@@ -71,8 +72,26 @@ const ResetPasswordForm = () => {
         navigate("/login");
       }, 3000);
     } catch (error) {
+      // Set token error if the issue is with the token
+      if (
+        error.message?.toLowerCase().includes("token") ||
+        error.message?.toLowerCase().includes("invalid") ||
+        error.message?.toLowerCase().includes("expired")
+      ) {
+        setTokenError(
+          error.message || "Invalid or expired reset token. Please request a new one."
+        );
+      }
       // Error handling is done by the store
     }
+  };
+
+  const handleInputChange = (setter) => (e) => {
+    setter(e.target.value);
+    // Clear errors when user types
+    setPasswordError("");
+    setConfirmPasswordError("");
+    setTokenError("");
   };
 
   return (
@@ -135,7 +154,7 @@ const ResetPasswordForm = () => {
                   type="password"
                   id="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handleInputChange(setPassword)}
                   onBlur={validatePassword}
                   className={`block w-full px-3 py-2 placeholder-gray-400 border ${
                     passwordError ? "border-red-300" : "border-gray-300"
@@ -158,7 +177,7 @@ const ResetPasswordForm = () => {
                   type="password"
                   id="confirmPassword"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={handleInputChange(setConfirmPassword)}
                   onBlur={validateConfirmPassword}
                   className={`block w-full px-3 py-2 placeholder-gray-400 border ${
                     confirmPasswordError ? "border-red-300" : "border-gray-300"
@@ -175,6 +194,9 @@ const ResetPasswordForm = () => {
               <div className="my-2">
                 {serverError && (
                   <p className="mt-2 text-sm text-red-600">{serverError}</p>
+                )}
+                {tokenError && (
+                  <p className="mt-2 text-sm text-red-600">{tokenError}</p>
                 )}
               </div>
 

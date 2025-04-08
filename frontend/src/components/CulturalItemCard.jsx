@@ -37,24 +37,35 @@ const CulturalItemCard = ({ item }) => {
             {item.description}
           </p>
           
-          {/* Tags */}
-          {item.tags && item.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-auto">
-              {item.tags.slice(0, 3).map(tag => (
-                <span 
-                  key={tag.id || tag.name} 
-                  className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full"
-                >
-                  {tag.name}
-                </span>
-              ))}
-              {item.tags.length > 3 && (
-                <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded-full">
-                  +{item.tags.length - 3} more
-                </span>
-              )}
+          {/* Footer with tags and view count */}
+          <div className="flex flex-col gap-2 mt-auto">
+            {item.tags && item.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {item.tags.slice(0, 3).map(tag => (
+                  <span 
+                    key={tag.id || tag.name} 
+                    className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full"
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+                {item.tags.length > 3 && (
+                  <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded-full">
+                    +{item.tags.length - 3} more
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* View count */}
+            <div className="text-xs text-gray-500 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              {item.view_count || 0} views
             </div>
-          )}
+          </div>
         </div>
       </div>
     </Link>

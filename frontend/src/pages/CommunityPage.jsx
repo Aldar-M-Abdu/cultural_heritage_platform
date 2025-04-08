@@ -25,150 +25,67 @@ const CommunityPage = () => {
     const fetchDiscussions = async () => {
       setIsLoading(true);
       try {
-        // Simulated API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Using the comments endpoint as a source of discussion data
+        const response = await fetch('/api/v1/comments');
         
-        // Mock data
-        const mockDiscussions = [
-          {
-            id: 1,
-            title: "Best practices for photographing ancient textiles?",
-            author: {
-              id: 101,
-              name: "Maria Wilson",
-              avatar: "https://randomuser.me/api/portraits/women/44.jpg",
-              role: "Textile Conservator"
-            },
-            category: "preservation",
-            content: "I'm working on documenting a collection of 18th century textiles and looking for advice on lighting and camera settings to capture the details without causing damage...",
-            createdAt: "2025-03-12T14:32:00Z",
-            commentCount: 23,
-            viewCount: 156,
-            isPinned: false,
-            lastActivity: "2025-03-14T09:15:00Z"
-          },
-          {
-            id: 2,
-            title: "Upcoming virtual symposium on Indigenous heritage preservation",
-            author: {
-              id: 102,
-              name: "Robert Eagle",
-              avatar: "https://randomuser.me/api/portraits/men/22.jpg",
-              role: "Cultural Heritage Specialist"
-            },
-            category: "events",
-            content: "I wanted to share information about an upcoming virtual symposium focused on collaborative approaches to preserving Indigenous cultural heritage. Speakers from various institutions will discuss...",
-            createdAt: "2025-03-10T09:45:00Z",
-            commentCount: 8,
-            viewCount: 97,
-            isPinned: true,
-            lastActivity: "2025-03-13T16:22:00Z"
-          },
-          {
-            id: 3,
-            title: "Help identifying this ceramic artifact from North Africa",
-            author: {
-              id: 103,
-              name: "Ahmed Hassan",
-              avatar: "https://randomuser.me/api/portraits/men/55.jpg",
-              role: "Amateur Archaeologist"
-            },
-            category: "identification",
-            content: "During my recent travels to Morocco, I came across this interesting ceramic piece that appears to be quite old. It has distinctive geometric patterns and...",
-            createdAt: "2025-03-11T18:21:00Z",
-            commentCount: 15,
-            viewCount: 112,
-            isPinned: false,
-            lastActivity: "2025-03-14T11:30:00Z"
-          },
-          {
-            id: 4,
-            title: "Introduction to dendrochronology for dating wooden artifacts",
-            author: {
-              id: 104,
-              name: "Sara Jensen",
-              avatar: "https://randomuser.me/api/portraits/women/68.jpg",
-              role: "Archaeologist"
-            },
-            category: "research",
-            content: "I recently completed a workshop on dendrochronology and wanted to share some insights on how this method can be applied to dating wooden artifacts. The process involves...",
-            createdAt: "2025-03-09T11:15:00Z",
-            commentCount: 12,
-            viewCount: 203,
-            isPinned: false,
-            lastActivity: "2025-03-13T14:45:00Z"
-          },
-          {
-            id: 5,
-            title: "Welcome to new members - Introduce yourself!",
-            author: {
-              id: 105,
-              name: "James Thompson",
-              avatar: "https://randomuser.me/api/portraits/men/32.jpg",
-              role: "Community Moderator"
-            },
-            category: "general",
-            content: "Welcome to our growing community of cultural heritage enthusiasts! Please take a moment to introduce yourself and share what brings you here. We'd love to know about your background, interests, and...",
-            createdAt: "2025-01-15T08:30:00Z",
-            commentCount: 87,
-            viewCount: 342,
-            isPinned: true,
-            lastActivity: "2025-03-14T10:12:00Z"
-          },
-          {
-            id: 6,
-            title: "Digital methods for reconstructing fragmented artifacts",
-            author: {
-              id: 106,
-              name: "Elena Petrova",
-              avatar: "https://randomuser.me/api/portraits/women/12.jpg",
-              role: "Digital Heritage Specialist"
-            },
-            category: "research",
-            content: "I'm working on a project using photogrammetry and 3D modeling to reconstruct fragmented ceramic vessels. I'd like to share our workflow and get feedback from others who have experience with similar...",
-            createdAt: "2025-03-08T15:40:00Z",
-            commentCount: 19,
-            viewCount: 178,
-            isPinned: false,
-            lastActivity: "2025-03-12T09:30:00Z"
-          },
-          {
-            id: 7,
-            title: "Ethical considerations when documenting sacred objects",
-            author: {
-              id: 107,
-              name: "David Yellowhorse",
-              avatar: "https://randomuser.me/api/portraits/men/41.jpg",
-              role: "Indigenous Rights Advocate"
-            },
-            category: "general",
-            content: "I wanted to start a discussion about the ethical considerations we should keep in mind when documenting sacred or ceremonial objects. This includes issues of access, permission, culturally sensitive information, and...",
-            createdAt: "2025-03-07T10:15:00Z",
-            commentCount: 31,
-            viewCount: 245,
-            isPinned: false,
-            lastActivity: "2025-03-13T20:45:00Z"
-          },
-          {
-            id: 8,
-            title: "Preventive conservation for small community museums",
-            author: {
-              id: 108,
-              name: "Sophia Chen",
-              avatar: "https://randomuser.me/api/portraits/women/33.jpg",
-              role: "Conservator"
-            },
-            category: "preservation",
-            content: "Many small community museums operate with limited resources but still need to protect their collections. I'd like to share some affordable preventive conservation measures that can make a big difference...",
-            createdAt: "2025-03-10T13:20:00Z",
-            commentCount: 16,
-            viewCount: 184,
-            isPinned: false,
-            lastActivity: "2025-03-14T08:10:00Z"
-          }
-        ];
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`);
+        }
         
-        setDiscussions(mockDiscussions);
+        // Get comments data
+        const commentsData = await response.json();
+        
+        // Get related cultural item data for each comment
+        const discussionsData = await Promise.all(
+          commentsData.map(async comment => {
+            try {
+              // Get cultural item details
+              const itemResponse = await fetch(`/api/v1/cultural-items/${comment.cultural_item_id}`);
+              const itemData = await itemResponse.json();
+              
+              // Get user data if available
+              let userData = { name: "Anonymous User", avatar: "https://randomuser.me/api/portraits/lego/1.jpg", role: "Community Member" };
+              if (comment.user_id) {
+                try {
+                  const userResponse = await fetch(`/api/v1/users/${comment.user_id}`);
+                  if (userResponse.ok) {
+                    const userDataResponse = await userResponse.json();
+                    userData = {
+                      id: userDataResponse.id,
+                      name: userDataResponse.full_name || userDataResponse.username,
+                      avatar: userDataResponse.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDataResponse.username)}`,
+                      role: userDataResponse.is_admin ? "Administrator" : "Community Member"
+                    };
+                  }
+                } catch (err) {
+                  console.error("Error fetching user data:", err);
+                }
+              }
+              
+              // Map to the format expected by the component
+              return {
+                id: comment.id,
+                title: itemData.title,
+                author: userData,
+                category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
+                content: comment.text,
+                createdAt: comment.created_at,
+                commentCount: Math.floor(Math.random() * 30), // Placeholder for now
+                viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
+                isPinned: false,
+                lastActivity: comment.created_at
+              };
+            } catch (err) {
+              console.error(`Error fetching data for comment ${comment.id}:`, err);
+              return null;
+            }
+          })
+        );
+        
+        // Filter out any failed requests
+        const validDiscussions = discussionsData.filter(discussion => discussion !== null);
+        
+        setDiscussions(validDiscussions);
       } catch (err) {
         console.error('Error fetching discussions:', err);
         setError('Failed to load discussions. Please try again later.');

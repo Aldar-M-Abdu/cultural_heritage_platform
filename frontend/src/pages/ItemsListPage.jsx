@@ -77,40 +77,9 @@ const ItemsListPage = () => {
     }
   };
 
-  // API functions for items
-  const itemsApi = {
-    getCulturalItems: async (params = {}) => {
-      return await api.get('/api/v1/cultural-items', params);
-    },
-    
-    getFeaturedItems: async () => {
-      return await api.get('/api/v1/cultural-items/featured');
-    },
-    
-    searchItems: async (searchTerm, params = {}) => {
-      return await api.get('/api/v1/cultural-items/search', { 
-        ...params,
-        query: searchTerm
-      });
-    },
-    
-    getItemsByTag: async (tag, params = {}) => {
-      return await api.get(`/api/v1/cultural-items/tags/${tag}`, params);
-    },
-    
-    getItemsByRegion: async (region, params = {}) => {
-      return await api.get(`/api/v1/cultural-items/regions/${region}`, params);
-    },
-    
-    getItemsByTimePeriod: async (period, params = {}) => {
-      return await api.get(`/api/v1/cultural-items/time-periods/${period}`, params);
-    }
-  };
-
   // Update the URL with filters and pagination
   useEffect(() => {
     const params = new URLSearchParams();
-        
     if (searchTerm) params.set('search', searchTerm);
     if (selectedRegion) params.set('region', selectedRegion);
     if (selectedTimePeriod) params.set('period', selectedTimePeriod);
@@ -130,89 +99,55 @@ const ItemsListPage = () => {
     const fetchItems = async () => {
       try {
         setIsLoading(true);
-        let response;
+        let endpoint = '/api/v1/cultural-items';
+        let params = {
+          page: currentPage,
+          limit: itemsPerPage,
+          sort_by: "created_at",
+          sort_order: "desc"
+        };
         
+        // Build query parameters based on filters
         if (searchTerm) {
-          // Search items by term
-          response = await itemsApi.searchItems(searchTerm, {
-            page: currentPage,
-            limit: itemsPerPage,
-            region: selectedRegion,
-            time_period: selectedTimePeriod,
-            tag: selectedTag
-          });
-        } else if (selectedTag) {
-          // Get items by tag
-          response = await itemsApi.getItemsByTag(selectedTag, {
-            page: currentPage,
-            limit: itemsPerPage,
-            region: selectedRegion,
-            time_period: selectedTimePeriod
-          });
-        } else if (selectedRegion && selectedTimePeriod) {
-          // Get items with both region and time period
-          response = await itemsApi.getItemsByRegion(selectedRegion, {
-            page: currentPage,
-            limit: itemsPerPage,
-            time_period: selectedTimePeriod
-          });
-        } else if (selectedRegion) {
-          // Get items by region
-          response = await itemsApi.getItemsByRegion(selectedRegion, {
-            page: currentPage,
-            limit: itemsPerPage
-          });
-        } else if (selectedTimePeriod) {
-          // Get items by time period
-          response = await itemsApi.getItemsByTimePeriod(selectedTimePeriod, {
-            page: currentPage,
-            limit: itemsPerPage
-          });
-        } else {
-          // Get all items with pagination
-          response = await itemsApi.getCulturalItems({
-            page: currentPage,
-            limit: itemsPerPage,
-            sort_by: "created_at",
-            sort_order: "desc"
-          });
+          endpoint = '/api/v1/cultural-items/search';
+          params.query = searchTerm;
         }
         
-        // Adjust to handle both array and object with pagination returned from API
-        if (Array.isArray(response)) {
-          const mappedItems = response.map(item => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            region: item.region,
-            time_period: item.time_period,
-            image_url: item.image_url,
-            tags: item.tags,
-            created_at: item.created_at
-          }));
-          setItems(mappedItems);
-          setFilteredItems(mappedItems);
-          setTotalPages(Math.ceil(mappedItems.length / itemsPerPage));
-        } else {
-          // If API returns object with items array and pagination
-          const mappedItems = (response.items || []).map(item => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            region: item.region,
-            time_period: item.time_period,
-            image_url: item.image_url,
-            tags: item.tags,
-            created_at: item.created_at
-          }));
-          setItems(mappedItems);
-          setFilteredItems(mappedItems);
-          setTotalPages(response.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
+        if (selectedRegion) {
+          params.region = selectedRegion;
         }
-
-        setActiveFilters(
-          [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
-        );
+        
+        if (selectedTimePeriod) {
+          params.time_period = selectedTimePeriod;
+        }
+        
+        if (selectedTag) {
+          params.tag = selectedTag;
+        }
+        
+        // Use api.get helper to make the request
+        try {
+          const data = await api.get(endpoint, params);
+          
+          if (Array.isArray(data)) {
+            setItems(data);
+            setFilteredItems(data);
+            setTotalPages(Math.ceil(data.length / itemsPerPage));
+          } else {
+            // If API returns object with items array and pagination
+            const mappedItems = (data.items || []);
+            setItems(mappedItems);
+            setFilteredItems(mappedItems);
+            setTotalPages(data.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
+          }
+          
+          setActiveFilters(
+            [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
+          );
+          setError(null);
+        } catch (apiError) {
+          throw apiError;
+        }
       } catch (err) {
         console.error('Failed to fetch items:', err);
         if (err.message === 'Resource not found') {

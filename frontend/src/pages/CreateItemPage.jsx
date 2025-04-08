@@ -4,60 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
-// Local API helper
-const itemsApi = {
-  async request(endpoint, method = 'GET', data = null) {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('token');
-    
-    const options = {
-      method,
-      headers: {
-        ...(!(data instanceof FormData) && {'Content-Type': 'application/json'}),
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
-      credentials: 'include',
-    };
-
-    if (data) {
-      options.body = data instanceof FormData ? data : JSON.stringify(data);
-    }
-
-    const response = await fetch(`${baseURL}${endpoint}`, options);
-    
-    if (response.status === 401) {
-      window.dispatchEvent(new Event('auth:sessionExpired'));
-      throw new Error('Session expired');
-    }
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw errorData;
-    }
-    
-    return response.status !== 204 ? await response.json() : null;
-  },
-
-  createItem: async (itemData) => {
-    // Convert the form data to match CulturalItemCreate schema
-    if (itemData instanceof FormData) {
-      // For file uploads, handle multipart form data
-      return await itemsApi.request('/api/v1/cultural-items', 'POST', itemData);
-    } else {
-      // Map fields to match CulturalItemCreate schema
-      const culturalItemData = {
-        title: itemData.name,
-        description: itemData.description,
-        time_period: itemData.era,
-        region: itemData.location,
-        historical_significance: itemData.significance,
-        // Add any other relevant fields
-      };
-      return await itemsApi.request('/api/v1/cultural-items', 'POST', culturalItemData);
-    }
-  }
-};
-
 const CreateItemPage = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuthStore();
@@ -201,8 +147,24 @@ const CreateItemPage = () => {
         formDataToSubmit.append(`file${index}`, fileObj.file);
       });
       
-      // Use the local API method
-      const response = await itemsApi.createItem(formDataToSubmit);
+      // Make the API request directly
+      const baseURL = import.meta.env.VITE_API_BASE_URL || '';
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${baseURL}/api/v1/cultural-items`, {
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: formDataToSubmit
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw errorData;
+      }
+      
+      await response.json();
       
       setSubmitSuccess(true);
       setFormData({

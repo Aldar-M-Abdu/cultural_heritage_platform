@@ -31,40 +31,19 @@ from app.api.v1.core.services import (
 from app.security import get_current_active_user, get_admin_user, get_optional_user
 import random
 
-# Fix: Remove duplicate API prefix
 router = APIRouter(tags=["cultural_items"])
 
-@router.get("", response_model=List[CulturalItem], operation_id="list_cultural_items")
-@router.get("/", response_model=List[CulturalItem], operation_id="list_cultural_items_alt")
-def read_cultural_items(
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(12, ge=1, le=100, description="Number of items per page"),
-    is_featured: Optional[bool] = Query(None, description="Filter by featured items"),
-    region: Optional[str] = Query(None, description="Filter by region"),
-    time_period: Optional[str] = Query(None, description="Filter by time period"),
-    sort_by: Optional[Literal["title", "created_at"]] = Query("created_at", description="Sort by field"),
-    sort_order: Optional[Literal["asc", "desc"]] = Query("desc", description="Sort order"),
+@router.get("/", response_model=List[CulturalItem])
+def get_cultural_items(
+    sort: str = "created_at",
+    limit: int = 10,
     db: Session = Depends(get_db),
 ) -> List[CulturalItem]:
-    skip = (page - 1) * limit
-    items = get_cultural_items(db, skip=skip, limit=limit)
-    
-    # Apply filters
-    if is_featured is not None:
-        items = [item for item in items if item.is_featured == is_featured]
-    if region:
-        items = [item for item in items if item.region and region.lower() in item.region.lower()]
-    if time_period:
-        items = [item for item in items if item.time_period and time_period.lower() in item.time_period.lower()]
-    
-    # Apply sorting
-    reverse = sort_order == "desc"
-    if sort_by == "title":
-        return sorted(items, key=lambda x: x.title.lower(), reverse=reverse)
-    else:  # default to created_at
-        return sorted(items, key=lambda x: x.created_at, reverse=reverse)
+    """Fetch cultural items with optional sorting and limit."""
+    items = db.query(DbCulturalItem).order_by(getattr(DbCulturalItem, sort).desc()).limit(limit).all()
+    return items
 
-@router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items")
+@router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items_v1")
 def search_items(
     query: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -94,7 +73,7 @@ def search_items(
     else:  # default to created_at
         return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
-@router.get("/random", response_model=List[CulturalItem], operation_id="get_random_items")
+@router.get("/random", response_model=List[CulturalItem], operation_id="get_random_cultural_items_v1")
 def get_random_cultural_items(
     count: int = Query(5, ge=1, le=20, description="Number of random items to return"),
     db: Session = Depends(get_db),
@@ -107,7 +86,7 @@ def get_random_cultural_items(
         return all_items
     return random.sample(all_items, count)
 
-@router.get("/tags", response_model=List[Tag], operation_id="list_tags")
+@router.get("/tags", response_model=List[Tag], operation_id="list_tags_v1")
 def read_tags(
     skip: int = 0,
     limit: int = 100,
@@ -115,7 +94,7 @@ def read_tags(
 ) -> List[Tag]:
     return get_all_tags(db, skip=skip, limit=limit)
 
-@router.get("/tags/{tag_name}", response_model=List[CulturalItem], operation_id="get_items_by_tag")
+@router.get("/tags/{tag_name}", response_model=List[CulturalItem], operation_id="get_cultural_items_by_tag_v1")
 def read_cultural_items_by_tag(
     tag_name: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -145,7 +124,7 @@ def read_cultural_items_by_tag(
     else:  # default to created_at
         return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
-@router.get("/regions/{region}", response_model=List[CulturalItem], operation_id="get_items_by_region")
+@router.get("/regions/{region}", response_model=List[CulturalItem], operation_id="get_cultural_items_by_region_v1")
 def read_cultural_items_by_region(
     region: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -159,7 +138,7 @@ def read_cultural_items_by_region(
         items = [item for item in items if item.is_featured == is_featured]
     return sorted(items, key=lambda x: x.created_at, reverse=True)
 
-@router.get("/time-periods/{time_period}", response_model=List[CulturalItem], operation_id="get_items_by_time_period")
+@router.get("/time-periods/{time_period}", response_model=List[CulturalItem], operation_id="get_cultural_items_by_time_period_v1")
 def read_cultural_items_by_time_period(
     time_period: str,
     page: int = Query(1, ge=1, description="Page number"),
@@ -173,7 +152,7 @@ def read_cultural_items_by_time_period(
         items = [item for item in items if item.is_featured == is_featured]
     return sorted(items, key=lambda x: x.created_at, reverse=True)
 
-@router.get("/featured", response_model=List[CulturalItem], operation_id="get_featured_items")
+@router.get("/featured", response_model=List[CulturalItem], operation_id="get_featured_cultural_items_v1")
 def read_featured_cultural_items(
     db: Session = Depends(get_db),
 ) -> List[CulturalItem]:
@@ -183,7 +162,7 @@ def read_featured_cultural_items(
     items = get_featured_cultural_items(db)
     return items
 
-@router.get("/{cultural_item_id}", response_model=CulturalItemDetail, operation_id="get_cultural_item")
+@router.get("/{cultural_item_id}", response_model=CulturalItemDetail, operation_id="get_cultural_item_detail_v1")
 def read_cultural_item(
     cultural_item_id: UUID,
     db: Session = Depends(get_db),
@@ -196,7 +175,7 @@ def read_cultural_item(
         )
     return db_item
 
-@router.post("/", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_cultural_item")
+@router.post("/", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_new_cultural_item_v1")
 def create_new_cultural_item(
     item: CulturalItemCreate,
     db: Session = Depends(get_db),
@@ -204,7 +183,7 @@ def create_new_cultural_item(
 ) -> CulturalItem:
     return create_cultural_item(db=db, item=item)
 
-@router.post("/media", response_model=Media, status_code=status.HTTP_201_CREATED, operation_id="upload_media")
+@router.post("/media", response_model=Media, status_code=status.HTTP_201_CREATED, operation_id="create_media_for_cultural_item_v1")
 def create_new_media(
     media: MediaCreate,
     db: Session = Depends(get_db),
@@ -217,7 +196,7 @@ def create_new_media(
     # Create media using the appropriate model structure
     return create_media(db=db, media=media)
 
-@router.put("/{cultural_item_id}", response_model=CulturalItem, operation_id="update_cultural_item")
+@router.put("/{cultural_item_id}", response_model=CulturalItem, operation_id="update_existing_cultural_item_v1")
 def update_item(
     cultural_item_id: UUID,
     item: CulturalItemUpdate,
@@ -229,7 +208,7 @@ def update_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cultural item not found")
     return db_item
 
-@router.delete("/{cultural_item_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_cultural_item")
+@router.delete("/{cultural_item_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_existing_cultural_item_v1")
 def delete_item(
     cultural_item_id: UUID,
     db: Session = Depends(get_db),

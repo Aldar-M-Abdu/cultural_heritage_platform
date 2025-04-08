@@ -35,53 +35,6 @@ const fallbackItems = [
   }
 ];
 
-// Local API helper
-const itemsApi = {
-  async request(endpoint, method = 'GET', data = null) {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('token');
-    
-    const options = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
-      credentials: 'include',
-    };
-
-    if (data && method !== 'GET') {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${baseURL}${endpoint}`, options);
-    
-    if (response.status === 401) {
-      window.dispatchEvent(new Event('auth:sessionExpired'));
-      throw new Error('Session expired');
-    }
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw errorData.message ? errorData : new Error('API request failed');
-    }
-    
-    return response.status !== 204 ? await response.json() : null;
-  },
-
-  getItems: async (params = {}) => {
-    const filteredParams = Object.fromEntries(
-      Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
-    );
-    const query = new URLSearchParams(filteredParams).toString();
-    return await itemsApi.request(`/api/v1/cultural-items?${query}`);
-  },
-
-  getFeaturedItems: async () => {
-    return await itemsApi.request('/api/v1/cultural-items/featured');
-  }
-};
-
 const HomePage = () => {
   const [featuredItems, setFeaturedItems] = useState([]);
   const [recentItems, setRecentItems] = useState([]);
@@ -92,18 +45,42 @@ const HomePage = () => {
     const fetchItems = async () => {
       setIsLoading(true);
       try {
-        const featured = await itemsApi.getFeaturedItems();
-        setFeaturedItems(featured?.items || featured || []);
+        // Fetch featured items with timeout and retry
+        const featuredPromise = fetch('/api/v1/cultural-items/featured', { 
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        })
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch featured items');
+            return response.json();
+          })
+          .catch(err => {
+            console.error('Featured items fetch error:', err);
+            // Return fallback data on error
+            return { items: fallbackItems };
+          });
 
-        const recent = await itemsApi.getItems({ sort: 'created_at', limit: 3 });
-        setRecentItems(recent?.items || recent || []);
+        // Fetch recent items with timeout and retry
+        const recentPromise = fetch('/api/v1/cultural-items?sort=created_at&limit=3', {
+          signal: AbortSignal.timeout(5000)
+        })
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch recent items');
+            return response.json();
+          })
+          .catch(err => {
+            console.error('Recent items fetch error:', err);
+            // Return fallback data on error
+            return { items: fallbackItems };
+          });
+
+        // Wait for both requests to complete
+        const [featured, recent] = await Promise.all([featuredPromise, recentPromise]);
+
+        setFeaturedItems(featured?.items || featured || fallbackItems);
+        setRecentItems(recent?.items || recent || fallbackItems);
       } catch (err) {
-        if (err.message === 'Resource not found') {
-          setError('No items found to display.');
-        } else {
-          console.error('Error fetching items:', err);
-          setError('Unable to load latest items. Showing sample content.');
-        }
+        console.error('Error in fetchItems:', err);
+        setError('Unable to connect to the server. Showing sample content.');
         setFeaturedItems(fallbackItems);
         setRecentItems(fallbackItems);
       } finally {
@@ -117,7 +94,7 @@ const HomePage = () => {
   // Handle image load errors
   const handleImageError = (e) => {
     e.target.onerror = null;
-    e.target.src = "https://images.unsplash.com/photo-1593014109521-48ea09f22592?auto=format&fit=crop&q=80";
+    e.target.src = "https://images.unsplash.com/photo-1572953109213-3be62398eb95?auto=format&fit=crop&q=80";
   };
 
   return (
