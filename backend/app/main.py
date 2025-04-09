@@ -3,23 +3,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from app.api.v1.core.endpoints import authentication, users, user_favorites
+from app.api.v1.core.endpoints import authentication, users, user_favorites, cultural_items, blog_posts
 from app.settings import settings
+from app.api.v1.api import api_router
 
 app = FastAPI(
-    title="Cultural Heritage Platform API",
-    description="API for the Cultural Heritage Platform",
-    version="0.1.0",
+    title="Cultural Heritage API",
+    description="API for cultural heritage platform",
+    version="1.0.0",
 )
 
 # Set up CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_origins=["*"],  # Adjust this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register API router with the /api/v1 prefix
+app.include_router(api_router, prefix="/api/v1")
 
 # Create API v1 router
 api_v1 = APIRouter(prefix="/api/v1")
@@ -28,9 +32,10 @@ api_v1 = APIRouter(prefix="/api/v1")
 api_v1.include_router(authentication.router, prefix="/auth", tags=["auth"])
 api_v1.include_router(users.router, prefix="/users", tags=["users"])
 api_v1.include_router(user_favorites.router, prefix="/favorites", tags=["favorites"])
+api_v1.include_router(cultural_items.router, prefix="/cultural-items", tags=["cultural-items"])
+api_v1.include_router(blog_posts.router, prefix="/blog", tags=["blog"])  # Add this line
 
 # Include other routers from your application here
-# e.g. api_v1.include_router(cultural_items_router, prefix="/cultural-items", tags=["cultural-items"])
 # e.g. api_v1.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 
 # Include API v1 router in the app

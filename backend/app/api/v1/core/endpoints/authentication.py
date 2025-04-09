@@ -154,8 +154,12 @@ async def register_user(
 
 
 @router.put("/update-profile", response_model=UserOutSchema, operation_id="update_user_profile")
-def update_user(
-    user: UserRegisterSchema,
+async def update_user(
+    username: str = Form(None),
+    email: str = Form(None),
+    password: str = Form(None),
+    full_name: str = Form(None),
+    profile_image: UploadFile = File(None),
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
 ):
@@ -168,30 +172,62 @@ def update_user(
     if not current_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    user_data = user.model_dump(exclude_unset=True, exclude={"password"})
+    # Check if email is being updated and is already taken by another user
+    if email and email != current_user.email:
+        existing_user = db.execute(
+            select(User).where(User.email == email, User.id != current_user.id)
+        ).scalars().first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email is already registered",
+            )
+        current_user.email = email
     
-    # Handle first_name and last_name if provided
-    if "first_name" in user_data or "last_name" in user_data:
-        first_name = user_data.pop("first_name", "")
-        last_name = user_data.pop("last_name", "")
-        if first_name or last_name:
-            current_name_parts = (current_user.full_name or "").split(" ", 1)
-            current_first = current_name_parts[0] if current_name_parts else ""
-            current_last = current_name_parts[1] if len(current_name_parts) > 1 else ""
-            new_first = first_name if first_name else current_first
-            new_last = last_name if last_name else current_last
+    # Check if username is being updated and is already taken by another user
+    if username and username != current_user.username:
+        existing_user = db.execute(
+            select(User).where(User.username == username, User.id != current_user.id)
+        ).scalars().first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username is already taken",
+            )
+        current_user.username = username
+    
+    # Update full_name if provided
+    if full_name:
+        current_user.full_name = full_name
+    
+    # Update password if provided
+    if password:
+        current_user.hashed_password = hash_password(password)
+    
+    # Handle profile image upload
+    if profile_image:
+        try:
+            # Create the directory if it doesn't exist
+            from pathlib import Path
+            UPLOAD_DIR = Path("static/profile_images")
+            UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
             
-            current_user.full_name = f"{new_first} {new_last}".strip()
+            # Save the file
+            new_filename = f"{current_user.id}_{profile_image.filename}"
+            file_path = UPLOAD_DIR / new_filename
+            
+            with open(file_path, "wb") as buffer:
+                contents = await profile_image.read()
+                buffer.write(contents)
+            
+            # Update user with profile image path
+            image_url = f"/static/profile_images/{new_filename}"
+            current_user.profile_image = image_url
+        except Exception as e:
+            # Log error but don't fail the update
+            print(f"Error saving profile image: {e}")
     
-    # Update the rest of the fields
-    for key, value in user_data.items():
-        if hasattr(current_user, key):
-            setattr(current_user, key, value)
-    
-    # Handle password separately
-    if hasattr(user, "password") and user.password:
-        current_user.hashed_password = hash_password(user.password)
-        
+    # Commit changes
     db.commit()
     db.refresh(current_user)
     return current_user

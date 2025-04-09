@@ -118,6 +118,10 @@ app.include_router(authentication.router, prefix="/api/v1/auth")
 app.include_router(cultural_items.router, prefix="/api/v1/cultural-items")
 app.include_router(comments.router, prefix="/api/v1/comments")
 
+# Add blog posts router
+from app.api.v1.core.endpoints import blog_posts
+app.include_router(blog_posts.router, prefix="/api/v1/blog")
+
 # Fix CORS middleware to allow multiple frontend URLs
 frontend_urls = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),

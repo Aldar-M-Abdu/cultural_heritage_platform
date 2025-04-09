@@ -143,15 +143,14 @@ class BlogPost(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('categories.id'), nullable=False)
+    category_name: Mapped[str] = mapped_column(String(100), nullable=False)
     author_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    category: Mapped["Category"] = relationship(back_populates="blog_posts")
     author: Mapped["User"] = relationship("User")
-    
+    # Category is stored directly as category_name string
 
 class Category(Base):
     __tablename__ = "categories"
@@ -159,8 +158,8 @@ class Category(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)    
     
-    # Relationships
-    blog_posts: Mapped[List["BlogPost"]] = relationship(back_populates="category")
+    # Remove the problematic relationship - BlogPost now uses category_name directly
+    # blog_posts: Mapped[List["BlogPost"]] = relationship(back_populates="category")
 
 
 class Contribution(Base):

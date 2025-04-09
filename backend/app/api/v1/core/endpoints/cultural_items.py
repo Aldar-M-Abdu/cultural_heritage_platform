@@ -15,7 +15,7 @@ from app.api.v1.core.schemas import (
     Media,
 )
 from app.api.v1.core.services import (
-    get_cultural_items,
+    get_cultural_items as get_items_service,
     search_cultural_items,
     get_all_tags,
     get_cultural_items_by_tag,
@@ -31,23 +31,49 @@ from app.api.v1.core.services import (
 from app.security import get_current_active_user, get_admin_user, get_optional_user
 import random
 
+# Router without prefix - will be mounted under /api/v1/cultural-items in the main app
 router = APIRouter(tags=["cultural_items"])
 
-@router.get("/", response_model=List[CulturalItem])
+@router.get("", response_model=List[CulturalItem])
 def get_cultural_items(
-    sort: str = "created_at",
-    limit: int = 10,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=1000, description="Number of items per page"),
+    sort_by: str = Query("created_at", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order (asc or desc)"),
+    region: Optional[str] = Query(None, description="Filter by region"),
+    time_period: Optional[str] = Query(None, description="Filter by time period"),
+    query: Optional[str] = Query(None, description="Search query"),
+    with_coordinates: Optional[bool] = Query(None, description="Filter items with coordinates"),
     db: Session = Depends(get_db),
 ) -> List[CulturalItem]:
-    """Fetch cultural items with optional sorting and limit."""
-    items = db.query(DbCulturalItem).order_by(getattr(DbCulturalItem, sort).desc()).limit(limit).all()
-    return items
+    """Fetch cultural items with filtering, sorting and pagination."""
+    skip = (page - 1) * limit
+    
+    # If search query is provided, use search function
+    if query:
+        items = search_cultural_items(db, query=query, skip=skip, limit=limit)
+    else:
+        items = get_items_service(db, skip=skip, limit=limit)
+    
+    # Apply filters
+    if region:
+        items = [item for item in items if item.region and region.lower() in item.region.lower()]
+    if time_period:
+        items = [item for item in items if item.time_period and time_period.lower() in item.time_period.lower()]
+    
+    # Sort items
+    reverse = sort_order.lower() == "desc"
+    if sort_by == "title":
+        return sorted(items, key=lambda x: x.title.lower() if x.title else "", reverse=reverse)
+    else:  # default to created_at
+        return sorted(items, key=lambda x: x.created_at, reverse=reverse)
 
+# Keep the rest of the existing routes but update their paths
 @router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items_v1")
 def search_items(
     query: str,
     page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(100, ge=1, le=100, description="Number of items per page"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of items per page (use 1000 for all)"),
     is_featured: Optional[bool] = Query(None, description="Filter by featured items"),
     region: Optional[str] = Query(None, description="Filter by region"),
     time_period: Optional[str] = Query(None, description="Filter by time period"),
@@ -175,7 +201,7 @@ def read_cultural_item(
         )
     return db_item
 
-@router.post("/", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_new_cultural_item_v1")
+@router.post("", response_model=CulturalItem, status_code=status.HTTP_201_CREATED, operation_id="create_new_cultural_item_v1")
 def create_new_cultural_item(
     item: CulturalItemCreate,
     db: Session = Depends(get_db),
@@ -201,11 +227,15 @@ def update_item(
     cultural_item_id: UUID,
     item: CulturalItemUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: Optional[User] = Depends(get_optional_user),
 ) -> CulturalItem:
-    db_item = update_cultural_item(db, cultural_item_id=cultural_item_id, item=item)
-    if not db_item:
+    # First check if the item exists
+    existing_item = get_cultural_item(db, cultural_item_id=cultural_item_id)
+    if not existing_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cultural item not found")
+    
+    # Then update the item
+    db_item = update_cultural_item(db, cultural_item_id=cultural_item_id, item=item, current_user=current_user)
     return db_item
 
 @router.delete("/{cultural_item_id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="delete_existing_cultural_item_v1")

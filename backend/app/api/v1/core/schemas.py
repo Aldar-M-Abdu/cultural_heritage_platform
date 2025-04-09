@@ -393,7 +393,7 @@ class PasswordResetRequestSchema(BaseModel):
 class BlogPostBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     content: str = Field(..., min_length=10)
-    category_id: UUID
+    category_name: str
 
 
 class BlogPostCreate(BlogPostBase):
@@ -403,7 +403,7 @@ class BlogPostCreate(BlogPostBase):
 class BlogPostUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=3, max_length=255)
     content: Optional[str] = Field(None, min_length=10)
-    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
 
 
 class BlogAuthor(BaseModel):
@@ -426,7 +426,10 @@ class BlogPostResponse(BlogPostBase):
     created_at: datetime
     updated_at: datetime
     author_id: UUID
-    category: CategoryResponse
     author: BlogAuthor
+
+    @property
+    def category(self):
+        return {"id": self.category_name, "name": self.category_name}
 
     model_config = ConfigDict(from_attributes=True)
