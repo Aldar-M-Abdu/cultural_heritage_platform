@@ -94,7 +94,7 @@ def create_media(db: Session, media: MediaCreate) -> Media:
     db.refresh(db_media)
     return db_media
 
-def update_cultural_item(db: Session, cultural_item_id: UUID, item: CulturalItemUpdate) -> Optional[CulturalItem]:
+def update_cultural_item(db: Session, cultural_item_id: UUID, item: CulturalItemUpdate, current_user=None) -> Optional[CulturalItem]:
     db_item = get_cultural_item(db, cultural_item_id)
     if not db_item:
         return None

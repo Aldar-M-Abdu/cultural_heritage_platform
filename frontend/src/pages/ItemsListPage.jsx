@@ -18,6 +18,8 @@ const popularTags = [
   { id: 6, name: 'Clothing' }
 ];
 
+// Fallback data to use when API is unavailable
+
 const ItemsListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -125,38 +127,104 @@ const ItemsListPage = () => {
           params.tag = selectedTag;
         }
         
-        // Use api.get helper to make the request
+        // Try alternative endpoints if you're unsure about the correct one
+        let tryEndpoints = [
+          '/api/v1/cultural-items',
+          '/api/cultural-items',
+          '/api/v1/items'
+        ];
+        
+        let successfulResponse = null;
+        let apiError = null;
+        
+        // Use api.get helper to make the request with fallback logic
         try {
-          const data = await api.get(endpoint, params);
+          console.log("Fetching items from primary endpoint:", endpoint);
+          successfulResponse = await api.get(endpoint, params);
+        } catch (firstError) {
+          console.warn(`Primary endpoint ${endpoint} failed:`, firstError);
+          apiError = firstError;
           
-          if (Array.isArray(data)) {
-            setItems(data);
-            setFilteredItems(data);
-            setTotalPages(Math.ceil(data.length / itemsPerPage));
+          // Try alternate endpoints if primary fails
+          for (const altEndpoint of tryEndpoints.filter(ep => ep !== endpoint)) {
+            try {
+              console.log(`Trying alternate endpoint: ${altEndpoint}`);
+              successfulResponse = await api.get(altEndpoint, params);
+              console.log("Alternate endpoint succeeded:", altEndpoint);
+              break; // Found a working endpoint
+            } catch (err) {
+              console.warn(`Alternate endpoint ${altEndpoint} also failed:`, err);
+            }
+          }
+        }
+        
+        if (successfulResponse) {
+          // Process API response if successful
+          if (Array.isArray(successfulResponse)) {
+            setItems(successfulResponse);
+            setFilteredItems(successfulResponse);
+            setTotalPages(Math.ceil(successfulResponse.length / itemsPerPage));
           } else {
             // If API returns object with items array and pagination
-            const mappedItems = (data.items || []);
+            const mappedItems = (successfulResponse.items || []);
             setItems(mappedItems);
             setFilteredItems(mappedItems);
-            setTotalPages(data.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
+            setTotalPages(successfulResponse.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
           }
           
           setActiveFilters(
             [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
           );
           setError(null);
-        } catch (apiError) {
-          throw apiError;
+        } else {
+          // Use fallback data if all API attempts fail
+          console.warn("All API endpoints failed. Using fallback data.");
+          
+          // Filter fallback data based on selected filters
+          let filtered = [...fallbackItems];
+          
+          if (selectedRegion) {
+            filtered = filtered.filter(item => item.region === selectedRegion);
+          }
+          
+          if (selectedTimePeriod) {
+            filtered = filtered.filter(item => item.time_period === selectedTimePeriod);
+          }
+          
+          if (selectedTag) {
+            filtered = filtered.filter(item => 
+              item.tags.some(tag => tag.name.toLowerCase() === selectedTag.toLowerCase())
+            );
+          }
+          
+          if (searchTerm) {
+            const searchLower = searchTerm.toLowerCase();
+            filtered = filtered.filter(item => 
+              item.title.toLowerCase().includes(searchLower) ||
+              item.description.toLowerCase().includes(searchLower) ||
+              item.region.toLowerCase().includes(searchLower)
+            );
+          }
+          
+          setItems(filtered);
+          setFilteredItems(filtered);
+          setTotalPages(Math.ceil(filtered.length / itemsPerPage));
+          
+          setActiveFilters(
+            [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
+          );
+          
+          // Show a less alarming error message when using fallback data
+          setError('Unable to connect to the server. Showing sample items instead.');
         }
       } catch (err) {
         console.error('Failed to fetch items:', err);
-        if (err.message === 'Resource not found') {
-          setError('No items found for the specified criteria.');
-        } else {
-          setError('Failed to load items. Please check your network connection or try again later.');
-        }
-        setItems([]);
-        setFilteredItems([]);
+        
+        // Use fallback data but notify user
+        setItems(fallbackItems);
+        setFilteredItems(fallbackItems);
+        setTotalPages(Math.ceil(fallbackItems.length / itemsPerPage));
+        setError('Connection issue. Showing sample items for demonstration.');
       } finally {
         setIsLoading(false);
       }

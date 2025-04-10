@@ -12,16 +12,20 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
+  // Get query parameters
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect');
+  
   // Get authentication state and functions from auth store
   const { login, isAuthenticated, isLoading, error } = useAuthStore();
   
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated) {
-      const from = location.state?.from?.pathname || '/';
+      const from = redirectPath || location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate, location]);
+  }, [isAuthenticated, navigate, location, redirectPath]);
   
   // Update error message when store error changes
   useEffect(() => {
@@ -49,30 +53,8 @@ const LoginPage = () => {
       await login({ email, password, rememberMe });
       // The useEffect above will handle redirection on successful login
     } catch (err) {
-      // Provide more specific error messages based on error type
-      if (err.message?.toLowerCase().includes('network') || 
-          err.message?.toLowerCase().includes('connection') ||
-          err.status === 'network_error') {
-        setErrorMessage('Network error. Please check your internet connection and try again.');
-      } else if (err.message?.toLowerCase().includes('not found') || 
-                err.message?.toLowerCase().includes('invalid') || 
-                err.message?.toLowerCase().includes('incorrect') ||
-                err.status === 401) {
-        setErrorMessage('Invalid email or password. Please try again.');
-      } else {
-        setErrorMessage(err.message || 'Login failed. Please try again.');
-      }
-      
-      // Improved error logging with proper status extraction
-      const status = err.status || 
-                     err.response?.status || 
-                     (err.originalError?.response?.status) || 
-                     'unknown';
-                     
-      console.error('Login error details:', { 
-        message: err.message, 
-        status: status
-      });
+      // Error handling is done by the store and useEffect
+      console.error('Login error:', err);
     }
   };
 

@@ -30,9 +30,9 @@ import ExamplePage from './pages/ExamplePage';
 import CommunityPage from './pages/CommunityPage';
 import ContributorsPage from './pages/ContributorsPage';
 import ExhibitionsPage from './pages/ExhibitionsPage';
-import TimelinePage from './pages/TimelinePage';
 import FAQPage from './pages/FAQPage';
 import useAuthStore from './stores/authStore';
+import EventsPage from './pages/EventsPage';
 
 const API_BASE_URL = 'http://localhost:8000'; // Ensure this matches the backend URL
 
@@ -74,44 +74,6 @@ function App() {
     };
   }, []);
 
-  // Add API request/response logging for debugging
-  useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = async function(url, options = {}) {
-      // Only log authentication-related requests
-      if (url.includes('/auth/')) {
-        console.log('API Request:', { url, method: options.method || 'GET' });
-        
-        // For debugging only - don't log credentials in production
-        if (process.env.NODE_ENV !== 'production' && options.body instanceof FormData) {
-          console.log('Request FormData contains:', 
-            [...options.body.entries()].map(([key, value]) => 
-              key === 'password' ? { key, value: '***' } : { key, value: 
-                value instanceof File ? `File: ${value.name}` : value }
-            )
-          );
-        }
-      }
-      
-      try {
-        const response = await originalFetch(url, options);
-        
-        if (url.includes('/auth/')) {
-          console.log('API Response:', { 
-            url, 
-            status: response.status, 
-            statusText: response.statusText,
-          });
-        }
-        
-        return response.clone();
-      } catch (error) {
-        console.error('API Request failed:', { url, error });
-        throw error;
-      }
-    };
-  }, []);
-
   return (
     <ToastProvider>
       <div className="min-h-screen flex flex-col">
@@ -138,6 +100,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/reset-confirmation" element={<ResetConfirmationPage />} />
             <Route path="/press" element={<PressPage />} />
+            <Route path="/events" element={<EventsPage/>} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/examples" element={<ExamplePage />} />
             
@@ -145,7 +108,6 @@ function App() {
             <Route path="/community" element={<CommunityPage />} />
             <Route path="/contributors" element={<ContributorsPage />} />
             <Route path="/exhibitions" element={<ExhibitionsPage />} />
-            <Route path="/timeline" element={<TimelinePage />} />
             <Route path="/faq" element={<FAQPage />} />
             
             {/* Protected routes */}

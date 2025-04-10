@@ -229,34 +229,6 @@ const HomePage = () => {
               <div className="bg-white overflow-hidden shadow-md rounded-xl">
                 <div className="aspect-w-3 aspect-h-2">
                   <img 
-                    src="https://images.unsplash.com/photo-1461360370896-922624d12aa1?auto=format&fit=crop&q=80" 
-                    alt="Historical timeline" 
-                    className="object-cover" 
-                    onError={handleImageError}
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900">Historical Timeline</h3>
-                  <p className="mt-3 text-base text-gray-500">
-                    Navigate through different time periods and see how art, tools, and culture evolved over millennia.
-                  </p>
-                  <div className="mt-6">
-                    <Link
-                      to="/timeline"
-                      className="inline-flex items-center text-indigo-700 hover:text-indigo-800 font-medium"
-                    >
-                      View Timeline
-                      <svg xmlns="http://www.w3.org/2000/svg" className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white overflow-hidden shadow-md rounded-xl">
-                <div className="aspect-w-3 aspect-h-2">
-                  <img 
                     src="https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&q=80" 
                     alt="Community discussions" 
                     className="object-cover" 

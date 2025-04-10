@@ -27,10 +27,13 @@ const MapView = () => {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const response = await fetch('/api/v1/cultural-items');
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+        const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items`);
+        
         if (!response.ok) {
-          throw new Error('Resource not found');
+          throw new Error(response.status === 404 ? 'Resource not found' : `Error: ${response.status}`);
         }
+        
         const data = await response.json();
         
         // Map the cultural items to the expected format

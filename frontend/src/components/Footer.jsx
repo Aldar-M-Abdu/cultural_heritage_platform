@@ -55,8 +55,8 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/timeline" className="hover:text-amber-500 transition-colors">
-                  Historical Timeline
+                <Link to="/events" className="hover:text-amber-500 transition-colors">
+                  Events
                 </Link>
               </li>
               <li>

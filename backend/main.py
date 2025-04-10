@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from app.api.v1.routers import router
 from app.settings import settings
 from app.db_setup import init_db, is_db_connected
-from app.api.v1.core.endpoints import authentication, cultural_items, comments
 
 # Load environment variables from .env file
 load_dotenv()
@@ -114,13 +113,6 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Include API router with all endpoints
 app.include_router(router, prefix="/api/v1")
-app.include_router(authentication.router, prefix="/api/v1/auth")
-app.include_router(cultural_items.router, prefix="/api/v1/cultural-items")
-app.include_router(comments.router, prefix="/api/v1/comments")
-
-# Add blog posts router
-from app.api.v1.core.endpoints import blog_posts
-app.include_router(blog_posts.router, prefix="/api/v1/blog")
 
 # Fix CORS middleware to allow multiple frontend URLs
 frontend_urls = [

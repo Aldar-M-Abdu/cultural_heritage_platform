@@ -13,6 +13,14 @@ const BlogPage = () => {
   const currentPage = parseInt(searchParams.get('page') || '1');
   const postsPerPage = 6;
   
+  // Fallback categories for when the API fails
+  const fallbackCategories = [
+    { id: 'news', name: 'News', post_count: 12 },
+    { id: 'research', name: 'Research', post_count: 8 },
+    { id: 'exhibitions', name: 'Exhibitions', post_count: 5 },
+    { id: 'conservation', name: 'Conservation', post_count: 7 }
+  ];
+  
   // Fetch blog posts and categories
   useEffect(() => {
     const fetchData = async () => {
@@ -20,33 +28,117 @@ const BlogPage = () => {
       setError(null);
       
       try {
-        // Fetch blog categories first
-        const categoriesResponse = await fetch('/api/v1/blog-posts/categories');
-        if (!categoriesResponse.ok) throw new Error('Failed to fetch blog categories');
-        const categoriesData = await categoriesResponse.json();
-        setCategories(categoriesData);
-        
-        // Prepare blog posts fetch URL with filters
-        let url = `/api/v1/blog-posts/?limit=${postsPerPage}&skip=${(currentPage - 1) * postsPerPage}`;
-        if (activeCategory !== 'all') {
-          url += `&category_id=${activeCategory}`;
+        // First try to fetch categories
+        try {
+          console.log("Fetching blog categories...");
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+          // Use AbortController for better timeout control
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const categoriesResponse = await fetch(`${API_BASE_URL}/api/v1/blog-posts/categories`, {
+            signal: controller.signal
+          }).catch(err => {
+            console.warn('Network error fetching categories:', err);
+            clearTimeout(timeoutId);
+            return { ok: false };
+          });
+          
+          clearTimeout(timeoutId);
+          console.log("Categories response status:", categoriesResponse.status);
+          
+          if (categoriesResponse.ok) {
+            const fetchedCategories = await categoriesResponse.json();
+            console.log("Fetched categories:", fetchedCategories);
+            
+            if (Array.isArray(fetchedCategories)) {
+              setCategories(fetchedCategories);
+            } else {
+              console.warn('Categories API returned non-array format:', fetchedCategories);
+              setCategories(fallbackCategories);
+            }
+          } else {
+            console.warn('Categories API returned status:', categoriesResponse.status);
+            setCategories(fallbackCategories);
+          }
+        } catch (categoryError) {
+          console.warn('Error fetching blog categories:', categoryError);
+          // Use fallback categories if the API is unavailable
+          setCategories(fallbackCategories);
         }
         
-        // Fetch the blog posts
-        const postsResponse = await fetch(url);
-        if (!postsResponse.ok) throw new Error('Failed to fetch blog posts');
-        const postsData = await postsResponse.json();
-        setBlogPosts(postsData);
+        // Now fetch blog posts
+        const skip = (currentPage - 1) * postsPerPage;
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+        let url = `${API_BASE_URL}/api/v1/blog-posts/?skip=${skip}&limit=${postsPerPage}`;
+        if (activeCategory !== 'all') {
+          url += `&category_id=${encodeURIComponent(activeCategory)}`;
+        }
+        
+        console.log("Fetching blog posts from URL:", url);
+        // Use AbortController for better timeout control
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        try {
+          const postsResponse = await fetch(url, {
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          console.log("Posts response status:", postsResponse.status);
+          
+          if (!postsResponse.ok) {
+            throw new Error(`Failed to fetch blog posts: ${postsResponse.status}`);
+          }
+          
+          const postsData = await postsResponse.json();
+          console.log("Fetched posts data:", postsData);
+          
+          // Ensure we always have an array of posts with proper data structure
+          const posts = Array.isArray(postsData) ? postsData : [];
+          
+          // Transform posts to ensure they have expected structure
+          const processedPosts = posts.map(post => {
+            // Ensure category is properly structured
+            if (!post.category) {
+              post.category = { 
+                id: post.category_name || 'uncategorized', 
+                name: post.category_name || 'Uncategorized' 
+              };
+            }
+            
+            // Ensure author is properly structured
+            if (!post.author) {
+              post.author = {
+                id: post.author_id,
+                username: 'Unknown',
+                full_name: 'Unknown Author'
+              };
+            }
+            
+            return post;
+          });
+          
+          console.log("Processed posts:", processedPosts);
+          setBlogPosts(processedPosts);
+        } catch (fetchError) {
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Request timed out. Please try again later.');
+          }
+          throw fetchError;
+        }
       } catch (err) {
-        console.error('Error fetching blog data:', err);
+        console.error('Error in fetchData:', err);
         setError('Failed to load blog content. Please try again later.');
+        setBlogPosts([]);
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchData();
-  }, [activeCategory, currentPage]);
+  }, [activeCategory, currentPage, postsPerPage]);
   
   // Format date for display
   const formatDate = (dateString) => {

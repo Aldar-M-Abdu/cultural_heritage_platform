@@ -427,9 +427,15 @@ class BlogPostResponse(BlogPostBase):
     updated_at: datetime
     author_id: UUID
     author: BlogAuthor
+    category: dict = None  # Change from property to field with default None
 
-    @property
-    def category(self):
-        return {"id": self.category_name, "name": self.category_name}
-
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True
+    )
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Set category dict explicitly during initialization
+        if hasattr(self, 'category_name'):
+            self.category = {"id": self.category_name, "name": self.category_name}

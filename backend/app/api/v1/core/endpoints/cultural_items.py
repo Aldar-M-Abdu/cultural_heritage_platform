@@ -107,7 +107,7 @@ def get_random_cultural_items(
     """
     Get random cultural items. Useful for homepage showcases or recommendations.
     """
-    all_items = get_cultural_items(db, skip=0, limit=100)
+    all_items = get_items_service(db, skip=0, limit=100)
     if len(all_items) <= count:
         return all_items
     return random.sample(all_items, count)

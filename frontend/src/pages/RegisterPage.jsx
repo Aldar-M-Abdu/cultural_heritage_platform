@@ -126,7 +126,12 @@ const RegisterPage = () => {
     
     try {
       // Submit registration data
-      await register(formData);
+      const registerData = {
+        ...formData,
+        profileImage: profileImage // Add profile image to the data
+      };
+      
+      await register(registerData);
       // Registration successful - redirect will happen based on isAuthenticated effect
     } catch (error) {
       setGeneralError(error.message || 'Registration failed. Please try again.');

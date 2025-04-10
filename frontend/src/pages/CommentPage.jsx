@@ -32,14 +32,14 @@ const commentsApi = {
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw errorData;
+      throw errorData.detail ? new Error(errorData.detail) : new Error('API request failed');
     }
     
     return response.status !== 204 ? await response.json() : null;
   },
 
   getComments: async (itemId) => {
-    return await commentsApi.request(`/api/v1/cultural-items/${itemId}/comments`);
+    return await commentsApi.request(`/api/v1/comments/${itemId}`);
   },
 
   addComment: async (commentData) => {

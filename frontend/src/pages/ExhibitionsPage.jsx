@@ -23,117 +23,16 @@ const ExhibitionsPage = () => {
     const fetchExhibitions = async () => {
       setIsLoading(true);
       try {
-        // Simulated API call
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Mock data
-        const mockExhibitions = [
-          {
-            id: 1,
-            title: "Ancient Egyptian Treasures",
-            subtitle: "Artifacts from the Old, Middle, and New Kingdoms",
-            description: "Explore the magnificent treasures of Ancient Egypt through a curated collection of artifacts spanning over 3,000 years of history. From intricate jewelry to monumental sculptures, discover the artistic and technological achievements of one of history's most fascinating civilizations.",
-            curator: "Dr. Emma Richardson",
-            curatorTitle: "Egyptologist",
-            itemCount: 43,
-            viewCount: 12540,
-            date: "February 15, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1608412759225-8cb7f42eb7fb?auto=format&fit=crop&q=80",
-            categories: ['ancient', 'featured'],
-            featured: true
-          },
-          {
-            id: 2,
-            title: "Indigenous Art of the Americas",
-            subtitle: "Pre-Columbian to Contemporary Works",
-            description: "This exhibition highlights the rich artistic traditions of Indigenous peoples across North, Central, and South America. Featuring everything from ancient ceramics to contemporary paintings, the collection showcases the continuity and evolution of Indigenous artistic expression.",
-            curator: "Maria Gonzalez",
-            curatorTitle: "Cultural Anthropologist",
-            itemCount: 67,
-            viewCount: 8930,
-            date: "January 20, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1628982078584-9525bf26f5c6?auto=format&fit=crop&q=80",
-            categories: ['indigenous', 'featured'],
-            featured: true
-          },
-          {
-            id: 3,
-            title: "The Silk Road: Cultural Exchange",
-            subtitle: "Objects from the Ancient Trade Routes",
-            description: "Follow the historic Silk Road through this exhibition of artifacts that showcase how ideas, technologies, and artistic styles spread across Asia and Europe. Explore textiles, ceramics, manuscripts, and more that reveal the rich cultural exchange facilitated by these ancient trade networks.",
-            curator: "Dr. Liu Wei",
-            curatorTitle: "Asian Studies Expert",
-            itemCount: 58,
-            viewCount: 7340,
-            date: "March 5, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1566386698798-64519daaf72d?auto=format&fit=crop&q=80",
-            categories: ['ancient'],
-            featured: false
-          },
-          {
-            id: 4,
-            title: "Industrial Revolution Innovations",
-            subtitle: "Technological Advances that Changed Society",
-            description: "Discover the machines, tools, and inventions that transformed society during the Industrial Revolution. This exhibition features early industrial artifacts and explains how these innovations fundamentally changed how people lived, worked, and related to each other.",
-            curator: "Thomas Wright",
-            curatorTitle: "Industrial Historian",
-            itemCount: 35,
-            viewCount: 5670,
-            date: "March 18, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1569930784237-ea65a2479c7e?auto=format&fit=crop&q=80",
-            categories: ['modern'],
-            featured: false
-          },
-          {
-            id: 5,
-            title: "Written Through Time",
-            subtitle: "Evolution of Writing Systems",
-            description: "Trace the development of human writing systems from ancient cuneiform and hieroglyphics to modern alphabets. This exhibition features tablets, manuscripts, and inscriptions that show how the written word has evolved across different cultures and time periods.",
-            curator: "Dr. Sarah Johnson",
-            curatorTitle: "Linguistic Anthropologist",
-            itemCount: 51,
-            viewCount: 9210,
-            date: "February 2, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?auto=format&fit=crop&q=80",
-            categories: ['ancient'],
-            featured: false
-          },
-          {
-            id: 6,
-            title: "Indigenous Technologies",
-            subtitle: "Traditional Knowledge and Innovation",
-            description: "Explore the sophisticated technologies developed by Indigenous peoples around the world, from water management systems to sustainable agricultural practices. This exhibition challenges common misconceptions and highlights the ingenuity of traditional knowledge systems.",
-            curator: "Robert Eagle",
-            curatorTitle: "Indigenous Studies Scholar",
-            itemCount: 40,
-            viewCount: 4890,
-            date: "April 1, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1605540436563-5bca919ae766?auto=format&fit=crop&q=80",
-            categories: ['indigenous', 'new'],
-            featured: false
-          },
-          {
-            id: 7,
-            title: "Cultural Heritage in the Digital Age",
-            subtitle: "New Technologies in Preservation",
-            description: "See how cutting-edge technologies like 3D scanning, augmented reality, and artificial intelligence are being used to document, preserve, and share cultural heritage. This exhibition showcases innovative projects from around the world that are helping to safeguard our shared cultural legacy.",
-            curator: "Dr. Michael Chen",
-            curatorTitle: "Digital Heritage Specialist",
-            itemCount: 28,
-            viewCount: 6780,
-            date: "March 30, 2025",
-            imageUrl: "https://images.unsplash.com/photo-1531279550271-23c2a77a765c?auto=format&fit=crop&q=80",
-            categories: ['modern', 'new'],
-            featured: false
-          }
-        ];
-
-        // Set featured exhibition as the first featured one
-        const featured = mockExhibitions.find(ex => ex.featured);
-        setFeaturedExhibition(featured);
-        
-        // Set all exhibitions
-        setExhibitions(mockExhibitions);
+        // Replace simulated API call and mock data with actual API call
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+        const response = await fetch(`${API_BASE_URL}/api/v1/exhibitions`);
+        if (response.ok) {
+          const data = await response.json();
+          // Process the real data
+          setExhibitions(data);
+        } else {
+          throw new Error('Failed to fetch exhibitions');
+        }
       } catch (err) {
         setError('Failed to load exhibitions. Please try again later.');
         console.error('Error fetching exhibitions:', err);

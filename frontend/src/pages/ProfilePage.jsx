@@ -263,44 +263,26 @@ const ProfilePage = () => {
   };
 
   const fetchUserItems = async () => {
-    if (!user) return;
-
-    setItemsLoading(true);
     try {
-      // Try multiple possible endpoints
-      const endpoints = [
-        `${API_BASE_URL}/api/v1/cultural-items?user_id=${user.id}`,
-        `${API_BASE_URL}/cultural-items?user_id=${user.id}`
-      ];
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const token = localStorage.getItem('token');
       
-      let data = null;
-      let error = null;
+      if (!user || !token) {
+        throw new Error("User or token not available");
+      }
       
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          if (response.ok) {
-            data = await response.json();
-            break;
-          } else {
-            error = `Error: ${response.status}`;
-          }
-        } catch (err) {
-          error = err.message;
-          console.error(`Error fetching from ${endpoint}:`, err);
+      const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items?user_id=${user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
       }
       
-      if (data) {
-        setUserItems(Array.isArray(data) ? data : data.items || []);
-      } else {
-        throw new Error(error || 'Failed to fetch user items');
-      }
+      const data = await response.json();
+      setUserItems(Array.isArray(data) ? data : data.items || []);
     } catch (error) {
       console.error('Error fetching user items:', error);
       setItemsError('Failed to load your items');
@@ -313,51 +295,25 @@ const ProfilePage = () => {
     if (!user) return;
 
     try {
-      // Try multiple possible endpoints
-      const endpoints = [
-        `${API_BASE_URL}/api/v1/user-contributions`, 
-        `${API_BASE_URL}/api/v1/users/contributions`,
-        `${API_BASE_URL}/user-contributions`
-      ];
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      const token = localStorage.getItem('token');
       
-      let data = null;
-      let error = null;
+      if (!token) {
+        throw new Error("Authentication token not available");
+      }
       
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          if (response.ok) {
-            data = await response.json();
-            break;
-          } else {
-            error = `Error: ${response.status}`;
-          }
-        } catch (err) {
-          error = err.message;
-          console.error(`Error fetching from ${endpoint}:`, err);
+      const response = await fetch(`${API_BASE_URL}/api/v1/user-contributions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
       }
       
-      if (data) {
-        setUserContributions(data);
-        
-        const stats = data.reduce((acc, contrib) => {
-          acc.total += 1;
-          if (contrib.contribution_type === 'add') acc.add += 1;
-          if (contrib.contribution_type === 'edit') acc.edit += 1;
-          if (contrib.contribution_type === 'delete') acc.delete += 1;
-          return acc;
-        }, { total: 0, add: 0, edit: 0, delete: 0 });
-        
-        setContributionStats(stats);
-      } else {
-        throw new Error(error || 'Failed to fetch user contributions');
-      }
+      const data = await response.json();
+      setUserContributions(data);
     } catch (error) {
       console.error('Error fetching user contributions:', error);
       

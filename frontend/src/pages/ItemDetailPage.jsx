@@ -24,8 +24,10 @@ const ItemDetailPage = () => {
     const fetchItemData = async () => {
       setIsLoading(true);
       try {
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+        
         // API call to fetch item by ID
-        const response = await fetch(`/api/v1/cultural-items/${id}`);
+        const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items/${id}`);
         if (!response.ok) {
           throw new Error('Failed to fetch item');
         }
@@ -56,12 +58,11 @@ const ItemDetailPage = () => {
         if (itemData) {
           try {
             // API call to fetch related items
-            const relatedResponse = await fetch(`/api/v1/cultural-items?region=${encodeURIComponent(itemData.region)}&limit=3&exclude=${id}`);
+            const relatedResponse = await fetch(`${API_BASE_URL}/api/v1/cultural-items?region=${encodeURIComponent(itemData.region)}&limit=3&exclude=${id}`);
             if (relatedResponse.ok) {
               const related = await relatedResponse.json();
               setRelatedItems(Array.isArray(related) ? related : related.items || []);
             } else {
-              console.log('Error response:', await relatedResponse.text());
               console.error('Failed to fetch related items:', relatedResponse.status);
             }
           } catch (relatedError) {
@@ -73,12 +74,17 @@ const ItemDetailPage = () => {
         // Check if item is in user's favorites
         if (isAuthenticated) {
           try {
-            const favoriteResponse = await fetch(`/api/v1/user-favorites/${id}`, {
+            const token = localStorage.getItem('token');
+            const favoriteResponse = await fetch(`${API_BASE_URL}/api/v1/user-favorites/check/${id}`, {
               headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${token}`
               }
             });
-            setIsFavorite(favoriteResponse.ok);
+            
+            if (favoriteResponse.ok) {
+              const data = await favoriteResponse.json();
+              setIsFavorite(data.is_favorite);
+            }
           } catch (favoriteError) {
             console.error('Error checking favorite status:', favoriteError);
             // Don't affect the main functionality

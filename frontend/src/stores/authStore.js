@@ -15,21 +15,21 @@ const useAuthStore = create(
       notifications: [],
       unreadNotificationsCount: 0,
 
-      login: async ({ email, password, rememberMe }) => {
+      login: async (credentials) => {
         set({ isLoading: true, error: null });
         
         try {
-          // Use the correct endpoint (/token instead of /login)
+          // Use the correct endpoint (/token instead of /login) for database token authentication
           const response = await fetch(`${API_BASE_URL}/api/v1/auth/token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             // Use URLSearchParams to format data as form fields
-            // Also, send email as username since backend expects 'username'
+            // Send email as username since backend expects 'username'
             body: new URLSearchParams({
-              'username': email, // Map email to username parameter
-              'password': password,
+              'username': credentials.email,
+              'password': credentials.password,
             }),
             credentials: 'include'
           });
@@ -37,55 +37,110 @@ const useAuthStore = create(
           const data = await response.json();
           
           if (!response.ok) {
-            // Create error with status code
-            const error = new Error(data.detail || data.message || 'Invalid email or password. Please try again.');
-            error.status = response.status;
-            error.data = data;
-            throw error;
+            const errorMessage = data.detail || data.message || 'Invalid email or password. Please try again.';
+            
+            set({ 
+              error: errorMessage, 
+              isLoading: false 
+            });
+            
+            throw new Error(errorMessage);
           }
           
-          // Extract token from the response
-          const { access_token, token } = data;
-          const authToken = access_token || token || data.access;
+          // Handle successful login with database token
+          localStorage.setItem('token', data.access_token);
           
-          if (!authToken) {
-            throw new Error('No token received from server');
+          // Fetch user data since the token endpoint doesn't return user data
+          const userResponse = await fetch(`${API_BASE_URL}/api/v1/auth/current-user`, {
+            headers: {
+              'Authorization': `Bearer ${data.access_token}`
+            }
+          });
+          
+          if (!userResponse.ok) {
+            throw new Error('Failed to fetch user data');
           }
           
-          // Store token in localStorage if rememberMe is true
-          if (rememberMe) {
-            localStorage.setItem('token', authToken);
-            localStorage.setItem('persistAuth', 'true');
-          } else {
-            localStorage.removeItem('persistAuth');
-          }
+          const userData = await userResponse.json();
           
-          // Update state
           set({ 
-            token: authToken, 
+            user: userData,
+            token: data.access_token,
             isAuthenticated: true,
             isLoading: false
           });
           
-          // Fetch user data
-          await get().fetchUser();
-          
-          return true;
-        } catch (error) {
-          // Make sure error always has a status
-          if (!error.status) {
-            error.status = error.name === 'TypeError' ? 'network_error' : 'unknown';
+          return { token: data.access_token, user: userData };
+        } catch (err) {
+          // If err doesn't have a response property, it's likely a network error
+          if (!err.response && !err.message.includes('failed')) {
+            set({ 
+              error: 'Network error. Please check your connection.', 
+              isLoading: false 
+            });
+            throw new Error('Network error. Please check your connection.');
           }
           
           set({ 
-            isLoading: false, 
-            error: error.message || 'Authentication failed',
-            isAuthenticated: false,
-            token: null,
-            user: null
+            error: err.message || 'Login failed', 
+            isLoading: false 
+          });
+          throw err;
+        }
+      },
+
+      register: async (userData) => {
+        set({ isLoading: true, error: null });
+        
+        try {
+          // Create FormData object for multipart form data (needed for profile image)
+          const formData = new FormData();
+          formData.append('username', userData.username);
+          formData.append('email', userData.email);
+          formData.append('password', userData.password);
+          
+          if (userData.full_name) {
+            formData.append('full_name', userData.full_name);
+          }
+          
+          // Add profile image if provided
+          if (userData.profileImage) {
+            formData.append('profile_image', userData.profileImage);
+          }
+          
+          const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+            method: 'POST',
+            body: formData,
+            // Don't set Content-Type header - browser will set it with boundary for FormData
           });
           
-          throw error;
+          const data = await response.json();
+          
+          if (!response.ok) {
+            const errorMessage = data.detail || data.message || 'Registration failed. Please try again.';
+            set({ error: errorMessage, isLoading: false });
+            throw new Error(errorMessage);
+          }
+          
+          // Registration returns user data and automatically logs in
+          localStorage.setItem('token', data.access_token);
+          
+          set({
+            user: data,
+            token: data.access_token,
+            isAuthenticated: true,
+            isLoading: false
+          });
+          
+          return data;
+        } catch (err) {
+          if (!err.response && !err.message.includes('failed')) {
+            set({ error: 'Network error. Please check your connection.', isLoading: false });
+            throw new Error('Network error. Please check your connection.');
+          }
+          
+          set({ error: err.message || 'Registration failed', isLoading: false });
+          throw err;
         }
       },
 
@@ -95,50 +150,32 @@ const useAuthStore = create(
 
         set({ isLoading: true, error: null });
         try {
-            // Try multiple possible API endpoints
-            const endpoints = [
-                `${API_BASE_URL}/api/v1/users/me`,
-                `${API_BASE_URL}/api/v1/auth/current-user`,
-                `${API_BASE_URL}/users/me`
-            ];
+            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+            // Use a single, reliable endpoint
+            const endpoint = `${API_BASE_URL}/api/v1/auth/current-user`;
             
-            let userData = null;
-            let responseError = null;
-            
-            for (const endpoint of endpoints) {
-                try {
-                    const response = await fetch(endpoint, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        userData = await response.json();
-                        break;
-                    } else if (response.status === 401) {
-                        get().logout();
-                        throw new Error('Session expired. Please login again.');
-                    } else {
-                        responseError = `Failed to fetch user data from ${endpoint}`;
-                    }
-                } catch (err) {
-                    responseError = err.message;
-                    console.error(`Error fetching from ${endpoint}:`, err);
-                    // Continue to the next endpoint
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+                
+            if (!response.ok) {
+                if (response.status === 401) {
+                    get().logout();
+                    throw new Error('Session expired. Please login again.');
+                } else {
+                    throw new Error(`Failed to fetch user data: ${response.status}`);
                 }
             }
             
-            if (userData) {
-                set({ 
-                    user: userData,
-                    isAuthenticated: true,
-                    error: null 
-                });
-                return userData;
-            } else {
-                throw new Error(responseError || 'Failed to fetch user data from any endpoint');
-            }
+            const userData = await response.json();
+            set({ 
+                user: userData,
+                isAuthenticated: true,
+                error: null 
+            });
+            return userData;
         } catch (err) {
             set({ error: err.message });
             throw err;
@@ -316,13 +353,17 @@ const useAuthStore = create(
           const endpoints = [
             `${API_BASE_URL}/api/v1/notifications/unread-count`,
             `${API_BASE_URL}/api/v1/users/notifications/unread-count`,
-            `${API_BASE_URL}/notifications/unread-count`
+            `${API_BASE_URL}/notifications/unread-count`,
+            // Add these additional endpoints to try
+            `${API_BASE_URL}/api/v1/notifications/count`,
+            `${API_BASE_URL}/api/v1/user/notifications/count`
           ];
           
           let countData = null;
           
           for (const endpoint of endpoints) {
             try {
+              console.log(`Attempting to fetch notification count from: ${endpoint}`);
               const response = await fetch(endpoint, {
                 headers: {
                   'Authorization': `Bearer ${token}`
@@ -331,8 +372,11 @@ const useAuthStore = create(
               
               if (response.ok) {
                 const data = await response.json();
-                set({ unreadNotificationsCount: data.unread_count });
-                return data.unread_count;
+                set({ unreadNotificationsCount: data.unread_count || data.count || 0 });
+                console.log(`Successfully fetched notification count from ${endpoint}`);
+                return data.unread_count || data.count || 0;
+              } else {
+                console.warn(`Failed to fetch from ${endpoint}: ${response.status} ${response.statusText}`);
               }
             } catch (error) {
               console.error(`Error fetching notification count from ${endpoint}:`, error);

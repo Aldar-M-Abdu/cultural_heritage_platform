@@ -1,30 +1,26 @@
-// Note: We haven't seen the original file, so this is an assumed implementation
-// Add this to your existing authStore if it contains the login implementation
-
 const login = async (credentials) => {
-  // Clear previous errors first
-  set({ error: null, isLoading: true });
+  set({ isLoading: true, error: null });
   
   try {
-    const response = await fetch('/api/v1/auth/login', {
+    // Use the correct endpoint (/token instead of /login) for database token authentication
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      // Use URLSearchParams to format data as form fields
+      // Send email as username since backend expects 'username'
+      body: new URLSearchParams({
+        'username': credentials.email,
+        'password': credentials.password,
+      }),
+      credentials: 'include'
     });
-
+    
     const data = await response.json();
     
     if (!response.ok) {
-      let errorMessage = data.detail || data.message || 'Login failed';
-      
-      // Provide more specific error messages
-      if (response.status === 401) {
-        errorMessage = 'Invalid email or password. Please try again.';
-      } else if (response.status === 429) {
-        errorMessage = 'Too many login attempts. Please try again later.';
-      } else if (response.status >= 500) {
-        errorMessage = 'Server error. Please try again later.';
-      }
+      const errorMessage = data.detail || data.message || 'Invalid email or password. Please try again.';
       
       set({ 
         error: errorMessage, 
@@ -34,7 +30,7 @@ const login = async (credentials) => {
       throw new Error(errorMessage);
     }
     
-    // Handle successful login
+    // Handle successful login with database token
     localStorage.setItem('token', data.access_token);
     set({ 
       user: data.user,
