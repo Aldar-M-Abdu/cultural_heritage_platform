@@ -10,9 +10,8 @@ from app.api.v1.core.models import BlogPost, User
 from app.api.v1.core.schemas import BlogPostResponse, BlogPostCreate, BlogPostUpdate
 from app.security import get_current_active_user, get_admin_user, get_optional_user
 
-# Update router to include the prefix that matches the frontend request
+# Update router to use a simpler prefix since the parent router already adds /api/v1
 router = APIRouter(
-    prefix="/api/v1/blog-posts",
     tags=["blog"]
 )
 

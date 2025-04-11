@@ -42,50 +42,52 @@ const HomePage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchItems = async () => {
+    const fetchItems = () => {
       setIsLoading(true);
-      try {
-        // Fetch featured items with timeout and retry
-        const featuredPromise = fetch('/api/v1/cultural-items/featured', { 
-          signal: AbortSignal.timeout(5000) // 5 second timeout
+      
+      // Create promise for featured items
+      const featuredPromise = fetch(`${API_BASE_URL}/api/v1/cultural-items/featured`, { 
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      })
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to fetch featured items');
+          return response.json();
         })
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to fetch featured items');
-            return response.json();
-          })
-          .catch(err => {
-            console.error('Featured items fetch error:', err);
-            // Return fallback data on error
-            return { items: fallbackItems };
-          });
+        .catch(err => {
+          console.error('Featured items fetch error:', err);
+          // Return fallback data on error
+          return { items: fallbackItems };
+        });
 
-        // Fetch recent items with timeout and retry
-        const recentPromise = fetch('/api/v1/cultural-items?sort=created_at&limit=3', {
-          signal: AbortSignal.timeout(5000)
+      // Create promise for recent items
+      const recentPromise = fetch(`${API_BASE_URL}/api/v1/cultural-items?sort_by=created_at&limit=3`, {
+        signal: AbortSignal.timeout(5000)
+      })
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to fetch recent items');
+          return response.json();
         })
-          .then(response => {
-            if (!response.ok) throw new Error('Failed to fetch recent items');
-            return response.json();
-          })
-          .catch(err => {
-            console.error('Recent items fetch error:', err);
-            // Return fallback data on error
-            return { items: fallbackItems };
-          });
+        .catch(err => {
+          console.error('Recent items fetch error:', err);
+          // Return fallback data on error
+          return { items: fallbackItems };
+        });
 
-        // Wait for both requests to complete
-        const [featured, recent] = await Promise.all([featuredPromise, recentPromise]);
-
-        setFeaturedItems(featured?.items || featured || fallbackItems);
-        setRecentItems(recent?.items || recent || fallbackItems);
-      } catch (err) {
-        console.error('Error in fetchItems:', err);
-        setError('Unable to connect to the server. Showing sample content.');
-        setFeaturedItems(fallbackItems);
-        setRecentItems(fallbackItems);
-      } finally {
-        setIsLoading(false);
-      }
+      // Wait for both requests to complete
+      Promise.all([featuredPromise, recentPromise])
+        .then(([featured, recent]) => {
+          setFeaturedItems(featured?.items || featured || fallbackItems);
+          setRecentItems(recent?.items || recent || fallbackItems);
+        })
+        .catch(err => {
+          console.error('Error in fetchItems:', err);
+          setError('Unable to connect to the server. Showing sample content.');
+          setFeaturedItems(fallbackItems);
+          setRecentItems(fallbackItems);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     };
 
     fetchItems();
@@ -198,34 +200,6 @@ const HomePage = () => {
           
           <div className="mt-10">
             <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="bg-white overflow-hidden shadow-md rounded-xl">
-                <div className="aspect-w-3 aspect-h-2">
-                  <img 
-                    src="https://images.unsplash.com/photo-1633261828996-f4e650342dab?auto=format&fit=crop&q=80" 
-                    alt="Interactive map" 
-                    className="object-cover" 
-                    onError={handleImageError}
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900">Interactive Map</h3>
-                  <p className="mt-3 text-base text-gray-500">
-                    Explore artifacts by geographical regions and discover the rich cultural diversity across the world.
-                  </p>
-                  <div className="mt-6">
-                    <Link
-                      to="/map"
-                      className="inline-flex items-center text-indigo-700 hover:text-indigo-800 font-medium"
-                    >
-                      Explore the Map
-                      <svg xmlns="http://www.w3.org/2000/svg" className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              
               <div className="bg-white overflow-hidden shadow-md rounded-xl">
                 <div className="aspect-w-3 aspect-h-2">
                   <img 

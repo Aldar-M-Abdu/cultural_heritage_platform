@@ -3,12 +3,13 @@ import { useParams } from 'react-router-dom';
 import CommentList from '../components/CommentList';
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { API_BASE_URL } from '../config';
 
 // Local API helper
 const commentsApi = {
-  async request(endpoint, method = 'GET', data = null) {
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-    const token = localStorage.getItem('token');
+  request(endpoint, method = 'GET', data = null) {
+    const baseURL = API_BASE_URL;
+    const token = localStorage.getItem('token') || useAuthStore.getState().token;
     
     const options = {
       method,
@@ -23,35 +24,39 @@ const commentsApi = {
       options.body = JSON.stringify(data);
     }
 
-    const response = await fetch(`${baseURL}${endpoint}`, options);
-    
-    if (response.status === 401) {
-      window.dispatchEvent(new Event('auth:sessionExpired'));
-      throw new Error('Session expired');
-    }
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw errorData.detail ? new Error(errorData.detail) : new Error('API request failed');
-    }
-    
-    return response.status !== 204 ? await response.json() : null;
+    return fetch(`${baseURL}${endpoint}`, options)
+      .then(response => {
+        if (response.status === 401) {
+          window.dispatchEvent(new Event('auth:sessionExpired'));
+          throw new Error('Session expired');
+        }
+        
+        if (!response.ok) {
+          return response.json()
+            .catch(() => ({}))
+            .then(errorData => {
+              throw errorData.detail ? new Error(errorData.detail) : new Error('API request failed');
+            });
+        }
+        
+        return response.status !== 204 ? response.json() : null;
+      });
   },
 
-  getComments: async (itemId) => {
-    return await commentsApi.request(`/api/v1/comments/${itemId}`);
+  getComments: (itemId) => {
+    return commentsApi.request(`/api/v1/comments/${itemId}`);
   },
 
-  addComment: async (commentData) => {
-    return await commentsApi.request('/api/v1/comments', 'POST', commentData);
+  addComment: (commentData) => {
+    return commentsApi.request('/api/v1/comments', 'POST', commentData);
   },
 
-  deleteComment: async (commentId) => {
-    return await commentsApi.request(`/api/v1/comments/${commentId}`, 'DELETE');
+  deleteComment: (commentId) => {
+    return commentsApi.request(`/api/v1/comments/${commentId}`, 'DELETE');
   },
 
-  replyToComment: async (commentId, replyData) => {
-    return await commentsApi.request(`/api/v1/comments/${commentId}/replies`, 'POST', replyData);
+  replyToComment: (commentId, replyData) => {
+    return commentsApi.request(`/api/v1/comments/${commentId}/replies`, 'POST', replyData);
   },
 };
 
@@ -66,7 +71,6 @@ const CommentPage = () => {
   const MAX_CHARS = 500;
   const MIN_CHARS = 5;
   
-  // Get user from auth store instead of directly from service
   const { user, isAuthenticated } = useAuthStore();
   const currentUser = user || { id: 'guest', name: 'Guest User' };
 
@@ -74,29 +78,35 @@ const CommentPage = () => {
     setCharCount(comment.length);
   }, [comment]);
 
-  // Fetch comments when component mounts
   useEffect(() => {
     if (itemId) {
       fetchComments();
     }
   }, [itemId]);
 
-  const fetchComments = async () => {
+  const fetchComments = () => {
     setIsLoading(true);
-    try {
-      if (itemId) {
-        const data = await commentsApi.getComments(itemId);
-        setComments(data || []);
-      } else {
-        // Simulate API for demo purposes
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setComments([]);
-      }
-    } catch (err) {
-      setError('Failed to load comments');
-      console.error('Error fetching comments:', err);
-    } finally {
-      setIsLoading(false);
+    
+    if (itemId) {
+      commentsApi.getComments(itemId)
+        .then(data => {
+          setComments(data || []);
+        })
+        .catch(err => {
+          setError('Failed to load comments');
+          console.error('Error fetching comments:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      return new Promise(resolve => setTimeout(resolve, 500))
+        .then(() => {
+          setComments([]);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
   };
 
@@ -108,7 +118,7 @@ const CommentPage = () => {
     }
   }, []);
 
-  const handleCommentSubmit = async (e) => {
+  const handleCommentSubmit = (e) => {
     e.preventDefault();
 
     if (!isAuthenticated) {
@@ -129,57 +139,63 @@ const CommentPage = () => {
     setIsSubmitting(true);
     setError('');
 
-    try {
-      if (itemId) {
-        // Real API call
-        const newComment = await commentsApi.addComment({
-          itemId,
-          text: comment,
-          userId: currentUser.id
+    if (itemId) {
+      commentsApi.addComment({
+        itemId,
+        text: comment,
+        userId: currentUser.id
+      })
+      .then(newComment => {
+        setComments(prev => [newComment, ...prev]);
+        setComment('');
+      })
+      .catch(err => {
+        setError(err.detail || 'Failed to submit comment');
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
+    } else {
+      const newComment = {
+        id: Date.now(),
+        text: comment,
+        timestamp: new Date().toISOString(),
+        user: { ...currentUser },
+        replies: []
+      };
+      
+      new Promise(resolve => setTimeout(resolve, 500))
+        .then(() => {
+          setComments(prev => [newComment, ...prev]);
+          setComment('');
+        })
+        .finally(() => {
+          setIsSubmitting(false);
         });
-        setComments(prev => [newComment, ...prev]);
-      } else {
-        // Simulated API for demo
-        const newComment = {
-          id: Date.now(),
-          text: comment,
-          timestamp: new Date().toISOString(),
-          user: { ...currentUser },
-          replies: []
-        };
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setComments(prev => [newComment, ...prev]);
-      }
-      setComment('');
-    } catch (err) {
-      setError(err.detail || 'Failed to submit comment');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteComment = async (commentId) => {
-    try {
-      await commentsApi.deleteComment(commentId);
-      setComments(prev => prev.filter(comment => comment.id !== commentId));
-    } catch (err) {
-      setError('Failed to delete comment');
-    }
+  const handleDeleteComment = (commentId) => {
+    commentsApi.deleteComment(commentId)
+      .then(() => {
+        setComments(prev => prev.filter(comment => comment.id !== commentId));
+      })
+      .catch(err => {
+        setError('Failed to delete comment');
+      });
   };
 
-  const handleReplyToComment = async (commentId, replyText) => {
+  const handleReplyToComment = (commentId, replyText) => {
     if (!isAuthenticated) {
       setError('Please sign in to reply to comments');
-      return;
+      return Promise.resolve(false);
     }
     
-    try {
-      const newReply = await commentsApi.replyToComment(commentId, {
-        text: replyText,
-        userId: currentUser.id
-      });
-      
-      // Update the comments array with the new reply
+    return commentsApi.replyToComment(commentId, {
+      text: replyText,
+      userId: currentUser.id
+    })
+    .then(newReply => {
       const updatedComments = comments.map(comment => {
         if (comment.id === commentId) {
           return {
@@ -192,10 +208,11 @@ const CommentPage = () => {
       
       setComments(updatedComments);
       return true;
-    } catch (err) {
+    })
+    .catch(err => {
       setError('Failed to add reply');
       return false;
-    }
+    });
   };
 
   return (

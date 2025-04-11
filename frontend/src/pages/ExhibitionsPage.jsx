@@ -20,25 +20,77 @@ const ExhibitionsPage = () => {
 
   // Fetch exhibition data
   useEffect(() => {
-    const fetchExhibitions = async () => {
+    const fetchExhibitions = () => {
       setIsLoading(true);
-      try {
-        // Replace simulated API call and mock data with actual API call
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-        const response = await fetch(`${API_BASE_URL}/api/v1/exhibitions`);
-        if (response.ok) {
-          const data = await response.json();
-          // Process the real data
-          setExhibitions(data);
-        } else {
-          throw new Error('Failed to fetch exhibitions');
-        }
-      } catch (err) {
-        setError('Failed to load exhibitions. Please try again later.');
-        console.error('Error fetching exhibitions:', err);
-      } finally {
-        setIsLoading(false);
-      }
+      
+      // Improved API call with more detailed error handling
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+      console.log('Fetching exhibitions from:', `${API_BASE_URL}/api/v1/cultural-items`);
+      
+      // First try cultural-items endpoint which maps to exhibitions
+      fetch(`${API_BASE_URL}/api/v1/cultural-items`)
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            console.log('First endpoint failed, trying alternative...');
+            // Try an alternative endpoint if the first fails
+            return fetch(`${API_BASE_URL}/exhibitions`)
+              .then(altResponse => {
+                if (altResponse.ok) {
+                  return altResponse.json();
+                }
+                // If that fails too, try another common endpoint
+                console.log('Second endpoint failed, trying final alternative...');
+                return fetch(`${API_BASE_URL}/api/v1/exhibitions`)
+                  .then(finalResponse => {
+                    if (finalResponse.ok) {
+                      return finalResponse.json();
+                    }
+                    throw new Error('All exhibition API endpoints failed');
+                  });
+              })
+              .catch(altErr => {
+                console.error('Alternative endpoint error:', altErr);
+                throw new Error('Failed to fetch exhibitions from all attempted endpoints');
+              });
+          }
+        })
+        .then(data => {
+          console.log('Exhibition data received:', data);
+          // Transform and process the data to match the exhibition format
+          const processedData = Array.isArray(data) ? data.map(item => ({
+            id: item.id,
+            title: item.title,
+            subtitle: item.time_period || 'Cultural Heritage Item',
+            description: item.description || 'No description available',
+            imageUrl: item.image_url || 'https://images.unsplash.com/photo-1572953109213-3be62398eb95?auto=format&fit=crop&q=80',
+            curator: item.region || 'Cultural Heritage Platform',
+            curatorTitle: 'Cultural Expert',
+            itemCount: item.media?.length || 1,
+            viewCount: item.view_count || 100,
+            date: new Date(item.created_at || Date.now()).toLocaleDateString(),
+            categories: item.tags?.map(tag => tag.name) || ['featured'],
+            is_featured: item.is_featured || false
+          })) : [];
+          
+          setExhibitions(processedData);
+          
+          if (processedData.length > 0) {
+            const featured = processedData.find(ex => ex.is_featured) || processedData[0];
+            setFeaturedExhibition(featured);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching exhibitions:', err);
+          setError('Failed to load exhibitions. Please try again later.');
+          
+          // Set empty arrays to avoid errors in UI rendering
+          setExhibitions([]);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     };
 
     fetchExhibitions();

@@ -3,20 +3,61 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+import uuid
 
 
 ### AUTH SCHEMAS
 class TokenSchema(BaseModel):
     access_token: str
     token_type: str
-
-
-class TokenData(BaseModel):
-    username: str | None = None
+    
+    class Config:
+        from_attributes = True
 
 
 ### USER SCHEMAS
+class UserBaseSchema(BaseModel):
+    email: EmailStr
+    username: str
+
+
+class UserCreateSchema(UserBaseSchema):
+    password: str = Field(..., min_length=8)
+    full_name: Optional[str] = None
+
+
+class UserRegisterSchema(UserCreateSchema):
+    password_confirm: str
+    
+    @validator('password_confirm')
+    def passwords_match(cls, v, values):
+        if 'password' in values and v != values['password']:
+            raise ValueError('Passwords do not match')
+        return v
+
+
+class UserUpdateSchema(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    username: Optional[str] = None
+    profile_image: Optional[str] = None
+    bio: Optional[str] = None
+
+
+class UserOutSchema(UserBaseSchema):
+    id: uuid.UUID
+    full_name: Optional[str] = None
+    profile_image: Optional[str] = None
+    bio: Optional[str] = None
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 class UserBase(BaseModel):
     email: EmailStr
     username: str
@@ -29,14 +70,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-
-
-class UserRegisterSchema(BaseModel):
-    email: EmailStr
-    username: Optional[str] = None
-    password: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
 
 
 class UserUpdate(BaseModel):

@@ -19,7 +19,6 @@ import BlogPage from './pages/BlogPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ContactPage from './pages/ContactPage';
 import ExplorePage from './pages/ExplorePage';
-import MapView from './pages/MapView';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -33,8 +32,7 @@ import ExhibitionsPage from './pages/ExhibitionsPage';
 import FAQPage from './pages/FAQPage';
 import useAuthStore from './stores/authStore';
 import EventsPage from './pages/EventsPage';
-
-const API_BASE_URL = 'http://localhost:8000'; // Ensure this matches the backend URL
+import { API_BASE_URL } from './config';
 
 // Scroll to top component when route changes
 const ScrollToTop = () => {
@@ -48,23 +46,38 @@ const ScrollToTop = () => {
 };
 
 function App() {
-  const { checkAuth, token } = useAuthStore();
+  const { checkAuth, token, fetchUser } = useAuthStore();
 
   // Check authentication state when app loads
   useEffect(() => {
-    if (token) {
-      // Now checkAuth is properly defined
-      checkAuth().catch(error => {
-        console.error('Failed to fetch user data:', error);
-      });
-    }
-  }, [token, checkAuth]);
+    const initAuth = async () => {
+      try {
+        if (token) {
+          await fetchUser().catch(error => {
+            console.error('Failed to fetch user data:', error);
+            // If fetching user data fails, try checking auth as a fallback
+            checkAuth().catch(err => {
+              console.error('Auth check also failed:', err);
+            });
+          });
+        } else {
+          await checkAuth();
+        }
+      } catch (error) {
+        console.error('Authentication initialization failed:', error);
+      }
+    };
+    
+    initAuth();
+  }, [token, checkAuth, fetchUser]);
 
   // Listen for custom auth events
   useEffect(() => {
     const handleSessionExpired = () => {
-      alert('Your session has expired. Please log in again.');
-      window.location.href = '/login';
+      // Use a less intrusive notification instead of an alert
+      console.warn('Your session has expired. Please log in again.');
+      // Don't force redirect, let the ProtectedRoute component handle that
+      useAuthStore.getState().logout();
     };
     
     window.addEventListener('auth:sessionExpired', handleSessionExpired);
@@ -94,7 +107,6 @@ function App() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/explore" element={<ExplorePage />} />
-            <Route path="/map" element={<MapView />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/forgot-password" element={<PasswordResetRequestPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />

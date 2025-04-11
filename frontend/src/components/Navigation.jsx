@@ -141,7 +141,6 @@ const Navigation = () => {
   const navItems = [
     { name: 'Home', href: '/' },
     { name: 'Collection', href: '/items' },
-    { name: 'Map', href: '/map' },
     { name: 'Blog', href: '/blog' },
     { name: 'Community', href: '/community' },
   ];

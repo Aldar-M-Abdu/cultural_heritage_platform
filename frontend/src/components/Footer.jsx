@@ -50,11 +50,6 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/map" className="hover:text-amber-500 transition-colors">
-                  Interactive Map
-                </Link>
-              </li>
-              <li>
                 <Link to="/events" className="hover:text-amber-500 transition-colors">
                   Events
                 </Link>

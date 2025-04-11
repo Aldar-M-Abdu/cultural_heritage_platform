@@ -4,6 +4,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import useAuthStore from '../stores/authStore';
 import CulturalItemCard from '../components/CulturalItemCard';
 import useToast from '../hooks/useToast';
+import { API_BASE_URL } from '../config';
 
 const ItemDetailPage = () => {
   const { id } = useParams();
@@ -21,89 +22,58 @@ const ItemDetailPage = () => {
 
   // Fetch item data when component mounts
   useEffect(() => {
-    const fetchItemData = async () => {
+    const fetchItemData = () => {
       setIsLoading(true);
-      try {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-        
-        // API call to fetch item by ID
-        const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items/${id}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch item');
-        }
-        
-        const itemData = await response.json();
-        
-        // Map cultural item fields to expected format
-        const mappedItem = {
-          ...itemData,
-          title: itemData.title,
-          description: itemData.description,
-          region: itemData.region,
-          time_period: itemData.time_period,
-          image_url: itemData.image_url,
-          tags: itemData.tags,
-          created_at: itemData.created_at,
-          additional_images: itemData.media?.filter(m => m.media_type === 'image').map(m => m.url) || []
-        };
-        setItem(mappedItem);
-        setActiveImage(mappedItem?.image_url || null);
-        
-        // Check if current user is the owner of this item
-        if (user && itemData.user_id === user.id) {
-          setIsOwner(true);
-        }
-        
-        // Also fetch related items
-        if (itemData) {
-          try {
-            // API call to fetch related items
-            const relatedResponse = await fetch(`${API_BASE_URL}/api/v1/cultural-items?region=${encodeURIComponent(itemData.region)}&limit=3&exclude=${id}`);
-            if (relatedResponse.ok) {
-              const related = await relatedResponse.json();
-              setRelatedItems(Array.isArray(related) ? related : related.items || []);
-            } else {
-              console.error('Failed to fetch related items:', relatedResponse.status);
-            }
-          } catch (relatedError) {
-            console.error('Error fetching related items:', relatedError);
-            // Don't set error state - we can still show the main item
+      
+      // API call to fetch item by ID
+      fetch(`${API_BASE_URL}/api/v1/cultural-items/${id}`)
+        .then(response => {
+          if (!response.ok) {
+            // Try alternative endpoint formats if the first one fails
+            return fetch(`${API_BASE_URL}/cultural-items/${id}`)
+              .then(altResponse => {
+                if (!altResponse.ok) {
+                  throw new Error('Failed to fetch item');
+                }
+                return altResponse.json();
+              })
+              .catch(altErr => {
+                throw new Error('Failed to fetch item');
+              });
           }
-        }
-        
-        // Check if item is in user's favorites
-        if (isAuthenticated) {
-          try {
-            const token = localStorage.getItem('token');
-            const favoriteResponse = await fetch(`${API_BASE_URL}/api/v1/user-favorites/check/${id}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            if (favoriteResponse.ok) {
-              const data = await favoriteResponse.json();
-              setIsFavorite(data.is_favorite);
-            }
-          } catch (favoriteError) {
-            console.error('Error checking favorite status:', favoriteError);
-            // Don't affect the main functionality
-          }
-        }
-      } catch (err) {
-        setError('Failed to load item. It may have been removed or you may not have permission to view it.');
-        console.error('Error in item data fetch:', err);
-      } finally {
-        setIsLoading(false);
-      }
+          return response.json();
+        })
+        .then(itemData => {
+          // Map cultural item fields to expected format
+          const mappedItem = {
+            ...itemData,
+            title: itemData.title,
+            description: itemData.description,
+            region: itemData.region,
+            time_period: itemData.time_period,
+            image_url: itemData.image_url,
+            tags: itemData.tags,
+            created_at: itemData.created_at,
+            additional_images: itemData.media?.filter(m => m.media_type === 'image').map(m => m.url) || []
+          };
+          setItem(mappedItem);
+          setActiveImage(mappedItem?.image_url || null);
+          
+          // Check if current user is the owner of this item
+          setIsOwner(
+            user && itemData.owner_id && user.id === itemData.owner_id
+          );
+        })
+        .catch(err => {
+          setError('Failed to load item. It may have been removed or you may not have permission to view it.');
+          console.error('Error in item data fetch:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     };
-
-    if (id) {
-      fetchItemData();
-    } else {
-      setError('Invalid item ID');
-      setIsLoading(false);
-    }
+    
+    fetchItemData();
   }, [id, user, isAuthenticated]);
 
   const handleDeleteItem = async () => {
@@ -112,10 +82,13 @@ const ItemDetailPage = () => {
     }
     
     try {
-      const response = await fetch(`/api/v1/cultural-items/${id}`, {
+      const token = localStorage.getItem('token') || useAuthStore.getState().token;
+      
+      const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -139,15 +112,16 @@ const ItemDetailPage = () => {
     try {
       if (isFavorite) {
         // Remove from favorites
-        await fetch(`/api/v1/user-favorites/${id}`, {
+        await fetch(`${API_BASE_URL}/api/v1/user-favorites/${id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
           }
         });
       } else {
         // Add to favorites
-        await fetch('/api/v1/user-favorites/', {
+        await fetch(`${API_BASE_URL}/api/v1/user-favorites/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

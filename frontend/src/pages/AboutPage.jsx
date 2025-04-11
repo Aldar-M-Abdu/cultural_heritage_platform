@@ -43,19 +43,13 @@ const AboutPage = () => {
               <svg className="h-6 w-6 text-teal-500 mr-3 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="leading-relaxed">Digital preservation of cultural artifacts with high-resolution imaging and detailed metadata</span>
+              <span className="leading-relaxed">Digital preservation with high-quality documentation and metadata</span>
             </li>
             <li className="flex items-start">
               <svg className="h-6 w-6 text-teal-500 mr-3 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
               <span className="leading-relaxed">Global community of cultural heritage enthusiasts, experts, and institutions</span>
-            </li>
-            <li className="flex items-start">
-              <svg className="h-6 w-6 text-teal-500 mr-3 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="leading-relaxed">Interactive mapping of cultural heritage sites with contextual information</span>
             </li>
             <li className="flex items-start">
               <svg className="h-6 w-6 text-teal-500 mr-3 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

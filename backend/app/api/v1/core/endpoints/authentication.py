@@ -44,6 +44,17 @@ def login(
             detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # First revoke existing tokens
+    db.execute(
+        delete(Token).where(
+            Token.user_id == user.id, 
+            Token.is_revoked == False
+        )
+    )
+    db.commit()
+    
+    # Create new token
     access_token = create_database_token(user_id=user.id, db=db)
     return {"access_token": access_token.token, "token_type": "bearer"}
 
@@ -252,15 +263,22 @@ def delete_user(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/refresh-token", operation_id="refresh_token")
+@router.post("/refresh-token", operation_id="refresh_token", response_model=TokenSchema)
 def refresh_token(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
-):
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Token refresh functionality is disabled",
-    )
+) -> TokenSchema:
+    """
+    Refresh the user's access token, creating a new one and invalidating the old one
+    """
+    # Revoke the current token
+    current_token.is_revoked = True
+    db.commit()
+    
+    # Create a new token
+    new_token = create_database_token(user_id=current_token.user_id, db=db)
+    
+    return {"access_token": new_token.token, "token_type": "bearer"}
 
 
 @router.post("/password-reset", status_code=status.HTTP_200_OK, operation_id="request_password_reset_email")
@@ -340,11 +358,7 @@ def get_current_user(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
 ) -> UserOutSchema:
-    user = (
-        db.execute(select(User).where(User.id == current_token.user_id))
-        .scalars()
-        .first()
-    )
+    user = current_token.user
     
     if not user:
         raise HTTPException(

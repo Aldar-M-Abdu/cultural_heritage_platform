@@ -20,9 +20,12 @@ if not DATABASE_URL:
 # Create SQLAlchemy engine with better connection pooling and timeout settings
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # Detect disconnections
-    pool_recycle=3600,   # Recycle connections after an hour
-    connect_args={"connect_timeout": 20}  # Increased timeout to 20 seconds
+    pool_pre_ping=True,            # Detect disconnections
+    pool_recycle=3600,             # Recycle connections after an hour
+    pool_size=20,                  # Increase connection pool size
+    max_overflow=30,               # Allow more connections when needed
+    echo=True,                     # Log SQL queries for debugging
+    connect_args={"connect_timeout": 30}  # Increased timeout to 30 seconds
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -30,8 +33,10 @@ def is_db_connected():
     """Check if the database is connected and available"""
     try:
         with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True
+            result = conn.execute(text("SELECT 1"))
+            row = result.fetchone()
+            print(f"Database connection test result: {row}")
+            return True
     except Exception as e:
         logging.error(f"Database connection check failed: {str(e)}")
         return False
@@ -50,6 +55,9 @@ def init_db():
 def get_db():
     """Get database session with improved error handling"""
     db = SessionLocal()
+    connected = is_db_connected()
+    print(f"Database connected: {connected}")
+    
     try:
         yield db
     except Exception as e:

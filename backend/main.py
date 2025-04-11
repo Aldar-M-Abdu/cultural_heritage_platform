@@ -117,7 +117,8 @@ app.include_router(router, prefix="/api/v1")
 # Fix CORS middleware to allow multiple frontend URLs
 frontend_urls = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
-    "http://localhost:3000"  # Backup URL for development
+    "http://localhost:3000",  # Backup URL for development
+    "*"  # Allow all origins in development - REMOVE IN PRODUCTION
 ]
 
 app.add_middleware(
@@ -126,7 +127,25 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Type", "Authorization"],
 )
+
+# Add middleware to handle preflight requests
+@app.middleware("http")
+async def handle_options(request, call_next):
+    if request.method == "OPTIONS":
+        # Handle preflight request
+        from fastapi.responses import Response
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("Origin", "*"),
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Allow-Credentials": "true",
+            },
+        )
+    return await call_next(request)
 
 @app.get("/")
 def root():

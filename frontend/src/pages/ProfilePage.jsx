@@ -6,7 +6,7 @@ import CulturalItemCard from '../components/CulturalItemCard';
 import { API_BASE_URL } from '../config';
 
 const ProfilePage = () => {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, token } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
   const [profileForm, setProfileForm] = useState({
     username: '',
@@ -123,24 +123,25 @@ const ProfilePage = () => {
     }
   };
 
-  const handleImageUpload = async () => {
+  const handleImageUpload = () => {
     if (!profileImage) return;
 
     setIsUploadingImage(true);
     setGeneralError('');
 
-    try {
-      await useAuthStore.getState().uploadProfileImage(profileImage);
-      setIsUploadingImage(false);
-      setProfileSuccess(true);
-      setTimeout(() => setProfileSuccess(false), 3000);
-    } catch (error) {
-      setGeneralError(error.message || 'Failed to upload profile image');
-      setIsUploadingImage(false);
-    }
+    useAuthStore.getState().uploadProfileImage(profileImage)
+      .then(() => {
+        setIsUploadingImage(false);
+        setProfileSuccess(true);
+        setTimeout(() => setProfileSuccess(false), 3000);
+      })
+      .catch(error => {
+        setGeneralError(error.message || 'Failed to upload profile image');
+        setIsUploadingImage(false);
+      });
   };
 
-  const handleProfileSubmit = async (e) => {
+  const handleProfileSubmit = (e) => {
     e.preventDefault();
     setIsUpdating(true);
     setGeneralError('');
@@ -156,34 +157,34 @@ const ProfilePage = () => {
       return;
     }
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(profileForm)
-      });
-
+    fetch(`${API_BASE_URL}/api/v1/users/me`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(profileForm)
+    })
+    .then(response => {
       if (!response.ok) {
         throw new Error('Failed to update profile');
       }
-
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
 
       if (profileImage) {
-        await handleImageUpload();
+        return handleImageUpload();
       }
-    } catch (error) {
+    })
+    .catch(error => {
       setGeneralError(error.message || 'Failed to update profile');
-    } finally {
+    })
+    .finally(() => {
       setIsUpdating(false);
-    }
+    });
   };
 
-  const handlePasswordSubmit = async (e) => {
+  const handlePasswordSubmit = (e) => {
     e.preventDefault();
     setIsChangingPassword(true);
     setGeneralError('');
@@ -202,19 +203,18 @@ const ProfilePage = () => {
       return;
     }
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          current_password: passwordForm.currentPassword,
-          new_password: passwordForm.newPassword
-        })
-      });
-
+    fetch(`${API_BASE_URL}/api/v1/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        current_password: passwordForm.currentPassword,
+        new_password: passwordForm.newPassword
+      })
+    })
+    .then(response => {
       if (!response.ok) {
         throw new Error('Failed to change password');
       }
@@ -226,106 +226,116 @@ const ProfilePage = () => {
       });
       setPasswordSuccess(true);
       setTimeout(() => setPasswordSuccess(false), 3000);
-    } catch (error) {
+    })
+    .catch(error => {
       setGeneralError(error.message || 'Failed to change password');
-    } finally {
+    })
+    .finally(() => {
       setIsChangingPassword(false);
-    }
+    });
   };
 
-  const handleNotificationSubmit = async (e) => {
+  const handleNotificationSubmit = (e) => {
     e.preventDefault();
     setIsUpdating(true);
     setGeneralError('');
     setNotificationSuccess(false);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/users/notifications/preferences`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(notificationPreferences)
-      });
-
+    fetch(`${API_BASE_URL}/api/v1/users/notifications/preferences`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(notificationPreferences)
+    })
+    .then(response => {
       if (!response.ok) {
         throw new Error('Failed to update notification preferences');
       }
 
       setNotificationSuccess(true);
       setTimeout(() => setNotificationSuccess(false), 3000);
-    } catch (error) {
+    })
+    .catch(error => {
       setGeneralError(error.message || 'Failed to update notification preferences');
-    } finally {
+    })
+    .finally(() => {
       setIsUpdating(false);
-    }
+    });
   };
 
-  const fetchUserItems = async () => {
+  const fetchUserItems = () => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-      const token = localStorage.getItem('token');
+      setItemsLoading(true);
       
-      if (!user || !token) {
-        throw new Error("User or token not available");
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items?user_id=${user.id}`, {
+      fetch(`${API_BASE_URL}/api/v1/cultural-items?user_id=${user.id}`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        setUserItems(Array.isArray(data) ? data : data.items || []);
+      })
+      .catch(error => {
+        console.error('Error fetching user items:', error);
+        setItemsError('Failed to load your items');
+      })
+      .finally(() => {
+        setItemsLoading(false);
       });
-      
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setUserItems(Array.isArray(data) ? data : data.items || []);
     } catch (error) {
       console.error('Error fetching user items:', error);
       setItemsError('Failed to load your items');
-    } finally {
-      setItemsLoading(false);
     }
   };
 
-  const fetchUserContributions = async () => {
+  const fetchUserContributions = () => {
     if (!user) return;
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-      const token = localStorage.getItem('token');
-      
       if (!token) {
         throw new Error("Authentication token not available");
       }
       
-      const response = await fetch(`${API_BASE_URL}/api/v1/user-contributions`, {
+      fetch(`${API_BASE_URL}/api/v1/user-contributions`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        setUserContributions(data);
+      })
+      .catch(error => {
+        console.error('Error fetching user contributions:', error);
+        
+        if (error.message.includes('401')) {
+          setContributionsError('Please log in to view your contributions');
+        } else if (error.message.includes('403')) {
+          setContributionsError('You do not have permission to access these contributions.');
+        } else if (error.message.includes('404')) {
+          setContributionsError('No contribution history found');
+        } else {
+          setContributionsError('Failed to load your contributions');
         }
       });
-      
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setUserContributions(data);
     } catch (error) {
       console.error('Error fetching user contributions:', error);
-      
-      if (error.message.includes('401')) {
-        setContributionsError('Please log in to view your contributions');
-      } else if (error.message.includes('403')) {
-        setContributionsError('You do not have permission to access these contributions.');
-      } else if (error.message.includes('404')) {
-        setContributionsError('No contribution history found');
-      } else {
-        setContributionsError('Failed to load your contributions');
-      }
+      setContributionsError('Failed to load your contributions');
     }
   };
 
@@ -887,7 +897,7 @@ const ProfilePage = () => {
                   ) : (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
                       <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2-2 2 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 2 012-2v-6a2-2 2 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>
                       <h3 className="mt-2 text-xl font-medium text-gray-900">No contributions yet</h3>
                       <p className="mt-1 text-sm text-gray-500">You haven't added any items to the collection yet.</p>

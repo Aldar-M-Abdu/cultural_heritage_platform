@@ -2,6 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
+// Fallback data to use when API fails
+const fallbackEvents = [
+  {
+    id: "e1b5e9c0-1c5d-4e3f-9b4a-8c2d7f5a6e3b",
+    title: "Ancient Egypt Exhibition",
+    description: "Explore the treasures of Ancient Egypt in this special exhibition featuring artifacts on loan from the Cairo Museum.",
+    start_date: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+    end_date: new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+    location: "National Museum of History",
+    image_url: "https://images.unsplash.com/photo-1608425029454-6427b5fbe635?auto=format&fit=crop&q=80",
+    is_free: true,
+    event_type: "Exhibition"
+  },
+  {
+    id: "a2c3e4f5-6d7e-8f9a-0b1c-2d3e4f5a6b7c",
+    title: "Cultural Heritage Preservation Workshop",
+    description: "A hands-on workshop teaching techniques for preserving and restoring cultural artifacts. Led by conservation experts.",
+    start_date: new Date(new Date().getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
+    end_date: new Date(new Date().getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // Same day
+    location: "City Cultural Center",
+    image_url: "https://images.unsplash.com/photo-1579762593175-20226054cad0?auto=format&fit=crop&q=80",
+    is_free: false,
+    event_type: "Workshop"
+  },
+  {
+    id: "f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c",
+    title: "Indigenous Art and Music Festival",
+    description: "Celebrating the rich artistic traditions of indigenous cultures with performances, exhibitions, and interactive demonstrations.",
+    start_date: new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
+    end_date: new Date(new Date().getTime() - 28 * 24 * 60 * 60 * 1000).toISOString(), // 28 days ago
+    location: "Community Heritage Park",
+    image_url: "https://images.unsplash.com/photo-1560095215-54da28f7833b?auto=format&fit=crop&q=80",
+    is_free: true,
+    event_type: "Festival"
+  }
+];
+
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -10,6 +47,8 @@ const EventsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const eventsPerPage = 6;
+  
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -17,60 +56,103 @@ const EventsPage = () => {
       setError(null);
       
       try {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-        // Use AbortController for better timeout control
+        // Create AbortController for timeout handling
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
         const url = `${API_BASE_URL}/api/v1/events/?page=${currentPage}&limit=${eventsPerPage}&filter_type=${activeFilter}`;
         
+        // First attempt - primary endpoint
+        let response;
         try {
-          const response = await fetch(url, {
-            signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch events: ${response.status}`);
-          }
-          
-          const data = await response.json();
-          
-          // If the API returns an array directly
-          if (Array.isArray(data)) {
-            setEvents(data);
-            // Estimate total pages based on whether we got a full page of events
-            setTotalPages(data.length < eventsPerPage ? currentPage : currentPage + 1);
-          } 
-          // If the API returns an object with data and pagination info
-          else if (data && data.items && Array.isArray(data.items)) {
-            setEvents(data.items);
-            setTotalPages(Math.ceil(data.total / eventsPerPage) || 1);
-          }
-          // Fallback for unexpected response format
-          else {
-            console.warn('Unexpected API response format:', data);
-            setEvents([]);
-            setTotalPages(1);
-          }
+          response = await fetch(url, { signal: controller.signal });
         } catch (fetchError) {
-          if (fetchError.name === 'AbortError') {
-            throw new Error('Request timed out. Please try again later.');
+          console.warn('Primary endpoint fetch failed:', fetchError);
+          
+          // Try alternative endpoint if first one fails or times out
+          try {
+            response = await fetch(`${API_BASE_URL}/events/?page=${currentPage}&limit=${eventsPerPage}&filter_type=${activeFilter}`, { 
+              signal: AbortSignal.timeout(5000) 
+            });
+          } catch (altFetchError) {
+            console.warn('Alternative endpoint fetch failed:', altFetchError);
+            throw new Error('All endpoints failed');
           }
-          throw fetchError;
         }
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`API returned status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Event data received:', data);
+        
+        // Process the response data based on its structure
+        let processedEvents = [];
+        let totalItems = 0;
+        
+        // Handle array response
+        if (Array.isArray(data)) {
+          processedEvents = data;
+          totalItems = data.length > eventsPerPage ? eventsPerPage * 2 : data.length; // Estimate total
+        } 
+        // Handle paginated response with items array
+        else if (data && data.items && Array.isArray(data.items)) {
+          processedEvents = data.items;
+          totalItems = data.total || data.count || processedEvents.length;
+        }
+        // Handle other response structures
+        else {
+          // Try to extract events from other common response formats
+          processedEvents = data.events || data.data || data.results || [];
+          totalItems = data.total_count || data.count || processedEvents.length;
+        }
+        
+        // Standardize the event data structure
+        const normalizedEvents = processedEvents.map(event => ({
+          id: event.id,
+          title: event.title || 'Untitled Event',
+          description: event.description || '',
+          start_date: event.start_date || event.startDate || event.start_time || new Date().toISOString(),
+          end_date: event.end_date || event.endDate || event.end_time,
+          location: event.location || 'Online Event',
+          image_url: event.image_url || event.imageUrl || event.image,
+          is_free: event.is_free || event.isFree || false,
+          event_type: event.event_type || event.type || event.category || 'Event'
+        }));
+        
+        setEvents(normalizedEvents);
+        setTotalPages(Math.ceil(totalItems / eventsPerPage) || 1);
+        
       } catch (err) {
-        console.error('Error in fetchEvents:', err);
-        setError('Failed to load events. Please try again later.');
-        setEvents([]);
+        console.error('Error fetching events:', err);
+        
+        // Filter fallback data based on the active filter
+        let filteredFallbackEvents = [...fallbackEvents];
+        const now = new Date();
+        
+        if (activeFilter === 'upcoming') {
+          filteredFallbackEvents = fallbackEvents.filter(event => 
+            new Date(event.start_date) > now
+          );
+        } else if (activeFilter === 'past') {
+          filteredFallbackEvents = fallbackEvents.filter(event => 
+            new Date(event.start_date) <= now
+          );
+        }
+        
+        setEvents(filteredFallbackEvents);
+        setTotalPages(Math.ceil(filteredFallbackEvents.length / eventsPerPage) || 1);
+        setError('Unable to connect to the server. Showing sample events instead.');
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchEvents();
-  }, [activeFilter, currentPage, eventsPerPage]);
+  }, [activeFilter, currentPage, eventsPerPage, API_BASE_URL]);
   
   const handleFilterChange = (filter) => {
     if (filter !== activeFilter) {
@@ -89,24 +171,39 @@ const EventsPage = () => {
   
   // Format date for display
   const formatEventDate = (dateString) => {
-    const options = { 
-      weekday: 'long',
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    try {
+      const options = { 
+        weekday: 'long',
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      };
+      return new Date(dateString).toLocaleDateString(undefined, options);
+    } catch (e) {
+      console.error('Date formatting error:', e);
+      return 'Date unavailable';
+    }
   };
   
   // Check if an event is happening today
   const isToday = (dateString) => {
-    const today = new Date();
-    const eventDate = new Date(dateString);
-    return eventDate.getDate() === today.getDate() &&
-      eventDate.getMonth() === today.getMonth() &&
-      eventDate.getFullYear() === today.getFullYear();
+    try {
+      const today = new Date();
+      const eventDate = new Date(dateString);
+      return eventDate.getDate() === today.getDate() &&
+        eventDate.getMonth() === today.getMonth() &&
+        eventDate.getFullYear() === today.getFullYear();
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Handle image loading errors
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    e.target.src = "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&q=80";
   };
 
   return (
@@ -155,13 +252,21 @@ const EventsPage = () => {
           </button>
         </div>
         
+        {/* Error message display */}
+        {error && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-700 p-4 rounded-lg mb-8">
+            <div className="flex">
+              <svg className="h-5 w-5 text-amber-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+        
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <LoadingSpinner size="lg" />
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
-            <p>{error}</p>
           </div>
         ) : events.length > 0 ? (
           <>
@@ -179,10 +284,7 @@ const EventsPage = () => {
                           src={event.image_url}
                           alt={event.title}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&q=80";
-                          }}
+                          onError={handleImageError}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-indigo-100">

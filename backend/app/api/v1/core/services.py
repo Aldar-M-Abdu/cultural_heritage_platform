@@ -18,7 +18,32 @@ from app.api.v1.core.schemas import (
 )
 
 def get_cultural_items(db: Session, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
-    return db.query(CulturalItem).offset(skip).limit(limit).all()
+    """Get cultural items with improved querying and debugging"""
+    try:
+        # First check if there are any items in the database
+        count = db.query(func.count(CulturalItem.id)).scalar()
+        print(f"Total cultural items in database: {count}")
+        
+        # If no items found, log this for debugging
+        if count == 0:
+            print("WARNING: No cultural items found in database!")
+            return []
+        
+        # Apply pagination with a larger limit if needed
+        if count < 100:
+            # If fewer than 100 items, return all of them
+            result = db.query(CulturalItem).all()
+        else:
+            # Otherwise paginate normally
+            result = db.query(CulturalItem).offset(skip).limit(limit).all()
+        
+        print(f"Retrieved {len(result)} cultural items")
+        return result
+    except Exception as e:
+        print(f"Error retrieving cultural items: {str(e)}")
+        # Return empty list on error rather than raising exception
+        # This prevents the API from crashing but logs the error
+        return []
 
 def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
     search = f"%{query}%"

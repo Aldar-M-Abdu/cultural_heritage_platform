@@ -5,6 +5,8 @@ import CulturalItemListCard from '../components/CulturalItemListCard';
 import Pagination from '../components/common/Pagination';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ItemSearchBar from '../components/ItemSearchBar';
+import { API_BASE_URL } from '../config';
+import useAuthStore from '../stores/authStore';
 
 // Sample data for filters - replace with API data when available
 const regions = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'];
@@ -19,6 +21,35 @@ const popularTags = [
 ];
 
 // Fallback data to use when API is unavailable
+const fallbackItems = [
+  {
+    id: 1,
+    title: "Ancient Greek Amphora",
+    region: "Greece",
+    time_period: "Classical Period (480-323 BCE)",
+    description: "Decorated ceramic vessel used for the transport and storage of wine, olive oil and other goods.",
+    image_url: "https://images.unsplash.com/photo-1603966187872-3a0f12839769?auto=format&fit=crop&q=80",
+    tags: [{ id: 1, name: "Pottery" }, { id: 2, name: "Greek" }]
+  },
+  {
+    id: 2,
+    title: "Viking Silver Bracelet",
+    region: "Scandinavia",
+    time_period: "Viking Age (793-1066 CE)",
+    description: "Intricately twisted silver arm ring with animal head terminals, used as both adornment and currency.",
+    image_url: "https://images.unsplash.com/photo-1599643477877-530eb83abc8e?auto=format&fit=crop&q=80",
+    tags: [{ id: 3, name: "Jewelry" }, { id: 4, name: "Viking" }]
+  },
+  {
+    id: 3,
+    title: "Mayan Jade Mask",
+    region: "Mesoamerica",
+    time_period: "Late Classic Period (600-900 CE)",
+    description: "Ceremonial mask carved from jade, representing the Mayan death god.",
+    image_url: "https://images.unsplash.com/photo-1590687755451-3c8552186068?auto=format&fit=crop&q=80",
+    tags: [{ id: 5, name: "Mask" }, { id: 6, name: "Mayan" }]
+  }
+];
 
 const ItemsListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,49 +66,6 @@ const ItemsListPage = () => {
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1', 10));
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage] = useState(12);
-
-  // Define API helper for HTTP requests
-  const api = {
-    async request(endpoint, method = 'GET', data = null) {
-      const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-      const token = localStorage.getItem('token');
-      
-      const options = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        credentials: 'include',
-      };
-
-      if (data && method !== 'GET') {
-        options.body = JSON.stringify(data);
-      }
-
-      const response = await fetch(`${baseURL}${endpoint}`, options);
-      
-      if (response.status === 401) {
-        window.dispatchEvent(new Event('auth:sessionExpired'));
-        throw new Error('Session expired');
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw errorData.message ? errorData : new Error('API request failed');
-      }
-      
-      return response.status !== 204 ? await response.json() : null;
-    },
-    
-    get: async (endpoint, params = {}) => {
-      const filteredParams = Object.fromEntries(
-        Object.entries(params).filter(([_, value]) => value !== undefined && value !== "")
-      );
-      const query = new URLSearchParams(filteredParams).toString();
-      return await api.request(`${endpoint}${query ? `?${query}` : ''}`);
-    }
-  };
 
   // Update the URL with filters and pagination
   useEffect(() => {
@@ -105,8 +93,7 @@ const ItemsListPage = () => {
         let params = {
           page: currentPage,
           limit: itemsPerPage,
-          sort_by: "created_at",
-          sort_order: "desc"
+          sort_by: "created_at"
         };
         
         // Build query parameters based on filters
@@ -127,49 +114,73 @@ const ItemsListPage = () => {
           params.tag = selectedTag;
         }
         
-        // Try alternative endpoints if you're unsure about the correct one
-        let tryEndpoints = [
-          '/api/v1/cultural-items',
-          '/api/cultural-items',
-          '/api/v1/items'
-        ];
-        
-        let successfulResponse = null;
-        let apiError = null;
-        
-        // Use api.get helper to make the request with fallback logic
-        try {
-          console.log("Fetching items from primary endpoint:", endpoint);
-          successfulResponse = await api.get(endpoint, params);
-        } catch (firstError) {
-          console.warn(`Primary endpoint ${endpoint} failed:`, firstError);
-          apiError = firstError;
-          
-          // Try alternate endpoints if primary fails
-          for (const altEndpoint of tryEndpoints.filter(ep => ep !== endpoint)) {
-            try {
-              console.log(`Trying alternate endpoint: ${altEndpoint}`);
-              successfulResponse = await api.get(altEndpoint, params);
-              console.log("Alternate endpoint succeeded:", altEndpoint);
-              break; // Found a working endpoint
-            } catch (err) {
-              console.warn(`Alternate endpoint ${altEndpoint} also failed:`, err);
-            }
+        // Create URLSearchParams object from the params
+        const queryParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== "") {
+            queryParams.append(key, value);
           }
+        });
+        
+        // Create promise for fetching items with timeout
+        const fetchPromise = fetch(`${API_BASE_URL}${endpoint}?${queryParams.toString()}`, { 
+          signal: AbortSignal.timeout(8000), // 8 second timeout
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+          }
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Failed to fetch items: ${response.status}`);
+          }
+          return response.json();
+        })
+        .catch(err => {
+          console.error('First endpoint fetch error:', err);
+          
+          // Try alternate endpoint if the first one fails
+          return fetch(`${API_BASE_URL}/cultural-items?${queryParams.toString()}`, {
+            signal: AbortSignal.timeout(5000)
+          })
+          .then(altResponse => {
+            if (!altResponse.ok) throw new Error('Failed to fetch items from alternate endpoint');
+            return altResponse.json();
+          })
+          .catch(altErr => {
+            console.error('Alternate endpoint fetch error:', altErr);
+            throw new Error('All endpoints failed');
+          });
+        });
+
+        // Wait for fetch to complete
+        let responseData;
+        try {
+          responseData = await fetchPromise;
+        } catch (err) {
+          console.error('All fetch attempts failed:', err);
+          throw err;
         }
         
-        if (successfulResponse) {
-          // Process API response if successful
-          if (Array.isArray(successfulResponse)) {
-            setItems(successfulResponse);
-            setFilteredItems(successfulResponse);
-            setTotalPages(Math.ceil(successfulResponse.length / itemsPerPage));
-          } else {
-            // If API returns object with items array and pagination
-            const mappedItems = (successfulResponse.items || []);
-            setItems(mappedItems);
-            setFilteredItems(mappedItems);
-            setTotalPages(successfulResponse.pagination?.totalPages || Math.ceil((mappedItems.length) / itemsPerPage));
+        // Process API response
+        if (responseData) {
+          // Check if the response is already an array
+          if (Array.isArray(responseData)) {
+            setItems(responseData);
+            setFilteredItems(responseData);
+            setTotalPages(Math.ceil(responseData.length / itemsPerPage));
+          } 
+          // If API returns object with items array and pagination info
+          else if (responseData.items && Array.isArray(responseData.items)) {
+            setItems(responseData.items);
+            setFilteredItems(responseData.items);
+            setTotalPages(Math.ceil(responseData.items.length / itemsPerPage));
+          }
+          // Other cases - try to extract data
+          else {
+            const extractedItems = responseData.data || responseData.results || [];
+            setItems(extractedItems);
+            setFilteredItems(extractedItems);
+            setTotalPages(Math.ceil(extractedItems.length / itemsPerPage));
           }
           
           setActiveFilters(
@@ -177,54 +188,50 @@ const ItemsListPage = () => {
           );
           setError(null);
         } else {
-          // Use fallback data if all API attempts fail
-          console.warn("All API endpoints failed. Using fallback data.");
-          
-          // Filter fallback data based on selected filters
-          let filtered = [...fallbackItems];
-          
-          if (selectedRegion) {
-            filtered = filtered.filter(item => item.region === selectedRegion);
-          }
-          
-          if (selectedTimePeriod) {
-            filtered = filtered.filter(item => item.time_period === selectedTimePeriod);
-          }
-          
-          if (selectedTag) {
-            filtered = filtered.filter(item => 
-              item.tags.some(tag => tag.name.toLowerCase() === selectedTag.toLowerCase())
-            );
-          }
-          
-          if (searchTerm) {
-            const searchLower = searchTerm.toLowerCase();
-            filtered = filtered.filter(item => 
-              item.title.toLowerCase().includes(searchLower) ||
-              item.description.toLowerCase().includes(searchLower) ||
-              item.region.toLowerCase().includes(searchLower)
-            );
-          }
-          
-          setItems(filtered);
-          setFilteredItems(filtered);
-          setTotalPages(Math.ceil(filtered.length / itemsPerPage));
-          
-          setActiveFilters(
-            [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
-          );
-          
-          // Show a less alarming error message when using fallback data
-          setError('Unable to connect to the server. Showing sample items instead.');
+          throw new Error('No data received from API');
         }
       } catch (err) {
         console.error('Failed to fetch items:', err);
         
         // Use fallback data but notify user
-        setItems(fallbackItems);
-        setFilteredItems(fallbackItems);
-        setTotalPages(Math.ceil(fallbackItems.length / itemsPerPage));
-        setError('Connection issue. Showing sample items for demonstration.');
+        console.warn("Using fallback data");
+        
+        // Filter fallback data based on selected filters
+        let filtered = [...fallbackItems];
+        
+        if (selectedRegion) {
+          filtered = filtered.filter(item => item.region.toLowerCase().includes(selectedRegion.toLowerCase()));
+        }
+        
+        if (selectedTimePeriod) {
+          filtered = filtered.filter(item => item.time_period.toLowerCase().includes(selectedTimePeriod.toLowerCase()));
+        }
+        
+        if (selectedTag) {
+          filtered = filtered.filter(item => 
+            item.tags && item.tags.some(tag => tag.name.toLowerCase() === selectedTag.toLowerCase())
+          );
+        }
+        
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          filtered = filtered.filter(item => 
+            (item.title && item.title.toLowerCase().includes(searchLower)) ||
+            (item.description && item.description.toLowerCase().includes(searchLower)) ||
+            (item.region && item.region.toLowerCase().includes(searchLower))
+          );
+        }
+        
+        setItems(filtered);
+        setFilteredItems(filtered);
+        setTotalPages(Math.ceil(filtered.length / itemsPerPage));
+        
+        setActiveFilters(
+          [searchTerm, selectedRegion, selectedTimePeriod, selectedTag].filter(Boolean).length
+        );
+        
+        // Show a less alarming error message when using fallback data
+        setError('Unable to connect to the server. Showing sample items instead.');
       } finally {
         setIsLoading(false);
       }

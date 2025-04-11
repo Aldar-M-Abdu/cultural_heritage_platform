@@ -26,42 +26,45 @@ const NotificationsPage = () => {
       return;
     }
     
-    const loadNotifications = async () => {
+    const loadNotifications = () => {
       setIsLoading(true);
-      try {
-        // Use consistent endpoint from the authStore
-        const allNotifications = await fetchNotifications(filter === 'unread', page); 
-        setNotifications(prev => page === 1 ? [...(allNotifications || [])] : [...prev, ...(allNotifications || [])]);
-        setHasMore(allNotifications && allNotifications.length > 0);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
-        setError('Failed to load notifications. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
+      // Use consistent endpoint from the authStore
+      fetchNotifications(filter === 'unread', page)
+        .then(allNotifications => {
+          setNotifications(prev => page === 1 ? [...(allNotifications || [])] : [...prev, ...(allNotifications || [])]);
+          setHasMore(allNotifications && allNotifications.length > 0);
+          setError(null);
+        })
+        .catch(err => {
+          console.error('Failed to fetch notifications:', err);
+          setError('Failed to load notifications. Please try again.');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     };
     
     loadNotifications();
   }, [isAuthenticated, fetchNotifications, navigate, page, filter]);
   
-  const handleMarkAsRead = async (notificationId) => {
-    try {
-      const success = await markNotificationAsRead(notificationId);
-      if (success) {
-        // Update local state to reflect change
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
-              ? { ...notification, is_read: true } 
-              : notification
-          )
-        );
-      }
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-      toast.error('Failed to update notification status');
-    }
+  const handleMarkAsRead = (notificationId) => {
+    markNotificationAsRead(notificationId)
+      .then(success => {
+        if (success) {
+          // Update local state to reflect change
+          setNotifications(prev => 
+            prev.map(notification => 
+              notification.id === notificationId 
+                ? { ...notification, is_read: true } 
+                : notification
+            )
+          );
+        }
+      })
+      .catch(err => {
+        console.error('Failed to mark notification as read:', err);
+        toast.error('Failed to update notification status');
+      });
   };
   
   const handleMarkAllAsRead = async () => {

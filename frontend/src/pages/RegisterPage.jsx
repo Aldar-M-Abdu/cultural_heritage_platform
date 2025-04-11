@@ -116,7 +116,7 @@ const RegisterPage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setGeneralError('');
     
@@ -124,18 +124,17 @@ const RegisterPage = () => {
       return;
     }
     
-    try {
-      // Submit registration data
-      const registerData = {
-        ...formData,
-        profileImage: profileImage // Add profile image to the data
-      };
-      
-      await register(registerData);
-      // Registration successful - redirect will happen based on isAuthenticated effect
-    } catch (error) {
-      setGeneralError(error.message || 'Registration failed. Please try again.');
-    }
+    // Submit registration data
+    const registerData = {
+      ...formData,
+      profileImage: profileImage // Add profile image to the data
+    };
+    
+    register(registerData)
+      .catch(error => {
+        setGeneralError(error.message || 'Registration failed. Please try again.');
+      });
+    // Registration successful - redirect will happen based on isAuthenticated effect
   };
 
   return (

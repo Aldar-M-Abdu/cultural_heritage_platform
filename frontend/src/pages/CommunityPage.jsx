@@ -22,76 +22,108 @@ const CommunityPage = () => {
 
   // Fetch discussions data
   useEffect(() => {
-    const fetchDiscussions = async () => {
+    const fetchDiscussions = () => {
       setIsLoading(true);
-      try {
-        // Using the comments endpoint as a source of discussion data
-        const response = await fetch('/api/v1/comments');
-        
-        if (!response.ok) {
-          throw new Error(`Error: ${response.status}`);
-        }
-        
-        // Get comments data
-        const commentsData = await response.json();
-        
-        // Get related cultural item data for each comment
-        const discussionsData = await Promise.all(
-          commentsData.map(async comment => {
-            try {
+      
+      // Using the comments endpoint as a source of discussion data
+      fetch('/api/v1/comments')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Error: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(commentsData => {
+          // Get related cultural item data for each comment
+          return Promise.all(
+            commentsData.map(comment => {
               // Get cultural item details
-              const itemResponse = await fetch(`/api/v1/cultural-items/${comment.cultural_item_id}`);
-              const itemData = await itemResponse.json();
-              
-              // Get user data if available
-              let userData = { name: "Anonymous User", avatar: "https://randomuser.me/api/portraits/lego/1.jpg", role: "Community Member" };
-              if (comment.user_id) {
-                try {
-                  const userResponse = await fetch(`/api/v1/users/${comment.user_id}`);
-                  if (userResponse.ok) {
-                    const userDataResponse = await userResponse.json();
-                    userData = {
-                      id: userDataResponse.id,
-                      name: userDataResponse.full_name || userDataResponse.username,
-                      avatar: userDataResponse.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDataResponse.username)}`,
-                      role: userDataResponse.is_admin ? "Administrator" : "Community Member"
+              return fetch(`/api/v1/cultural-items/${comment.cultural_item_id}`)
+                .then(itemResponse => itemResponse.json())
+                .then(itemData => {
+                  // Get user data if available
+                  let userData = { name: "Anonymous User", avatar: "https://randomuser.me/api/portraits/lego/1.jpg", role: "Community Member" };
+                  if (comment.user_id) {
+                    return fetch(`/api/v1/users/${comment.user_id}`)
+                      .then(userResponse => {
+                        if (userResponse.ok) {
+                          return userResponse.json();
+                        }
+                        return userData;
+                      })
+                      .then(userDataResponse => {
+                        userData = {
+                          id: userDataResponse.id,
+                          name: userDataResponse.full_name || userDataResponse.username,
+                          avatar: userDataResponse.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDataResponse.username)}`,
+                          role: userDataResponse.is_admin ? "Administrator" : "Community Member"
+                        };
+                        
+                        // Map to the format expected by the component
+                        return {
+                          id: comment.id,
+                          title: itemData.title,
+                          author: userData,
+                          category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
+                          content: comment.text,
+                          createdAt: comment.created_at,
+                          commentCount: Math.floor(Math.random() * 30), // Placeholder for now
+                          viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
+                          isPinned: false,
+                          lastActivity: comment.created_at
+                        };
+                      })
+                      .catch(err => {
+                        console.error("Error fetching user data:", err);
+                        // Map to the format expected by the component with default user data
+                        return {
+                          id: comment.id,
+                          title: itemData.title,
+                          author: userData,
+                          category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
+                          content: comment.text,
+                          createdAt: comment.created_at,
+                          commentCount: Math.floor(Math.random() * 30), // Placeholder for now
+                          viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
+                          isPinned: false,
+                          lastActivity: comment.created_at
+                        };
+                      });
+                  } else {
+                    // Map to the format expected by the component with default user data
+                    return {
+                      id: comment.id,
+                      title: itemData.title,
+                      author: userData,
+                      category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
+                      content: comment.text,
+                      createdAt: comment.created_at,
+                      commentCount: Math.floor(Math.random() * 30), // Placeholder for now
+                      viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
+                      isPinned: false,
+                      lastActivity: comment.created_at
                     };
                   }
-                } catch (err) {
-                  console.error("Error fetching user data:", err);
-                }
-              }
-              
-              // Map to the format expected by the component
-              return {
-                id: comment.id,
-                title: itemData.title,
-                author: userData,
-                category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
-                content: comment.text,
-                createdAt: comment.created_at,
-                commentCount: Math.floor(Math.random() * 30), // Placeholder for now
-                viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
-                isPinned: false,
-                lastActivity: comment.created_at
-              };
-            } catch (err) {
-              console.error(`Error fetching data for comment ${comment.id}:`, err);
-              return null;
-            }
-          })
-        );
-        
-        // Filter out any failed requests
-        const validDiscussions = discussionsData.filter(discussion => discussion !== null);
-        
-        setDiscussions(validDiscussions);
-      } catch (err) {
-        console.error('Error fetching discussions:', err);
-        setError('Failed to load discussions. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
+                })
+                .catch(err => {
+                  console.error(`Error fetching data for comment ${comment.id}:`, err);
+                  return null;
+                });
+            })
+          );
+        })
+        .then(discussionsData => {
+          // Filter out any failed requests
+          const validDiscussions = discussionsData.filter(discussion => discussion !== null);
+          setDiscussions(validDiscussions);
+        })
+        .catch(err => {
+          console.error('Error fetching discussions:', err);
+          setError('Failed to load discussions. Please try again later.');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     };
     
     fetchDiscussions();

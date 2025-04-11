@@ -40,48 +40,55 @@ const ExplorePage = () => {
   const [items, setItems] = useState(staticData.data);
 
   useEffect(() => {
-    const fetchExploreItems = async () => {
+    const fetchExploreItems = () => {
       try {
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-        const response = await fetch(`${API_BASE_URL}/api/v1/cultural-items/featured`);
-        
-        if (!response.ok) {
-          // Fall back to static data if API fails
-          const itemsWithFallback = staticData.data.map(item => ({
-            ...item,
-            handleImageError: (e) => {
-              e.target.onerror = null;
-              e.target.src = fallbackImage;
+        fetch(`${API_BASE_URL}/api/v1/cultural-items/featured`)
+          .then(response => {
+            if (!response.ok) {
+              // Fall back to static data if API fails
+              // Try alternate endpoints if the featured endpoint fails
+              return fetch(`${API_BASE_URL}/api/v1/cultural-items?limit=9`).then(r => {
+                if (!r.ok) throw new Error('Failed to fetch items');
+                return r.json();
+              }).catch(e => {
+                console.warn("Fallback endpoint also failed:", e);
+                throw e; // Re-throw to trigger the fallback data
+              });
             }
-          }));
-          setItems(itemsWithFallback);
-          return;
-        }
-        
-        const data = await response.json();
-        const fetchedItems = Array.isArray(data) ? data : [];
-        
-        // Add error handling to each item
-        const itemsWithFallback = fetchedItems.map(item => ({
-          ...item,
-          handleImageError: (e) => {
-            e.target.onerror = null;
-            e.target.src = fallbackImage;
-          }
-        }));
-        
-        setItems(itemsWithFallback);
+            
+            return response.json();
+          })
+          .then(data => {
+            if (!data) return; // Early return if we used the fallback above
+            
+            const fetchedItems = Array.isArray(data) ? data : [];
+            
+            // Add error handling to each item
+            const itemsWithFallback = fetchedItems.map(item => ({
+              ...item,
+              handleImageError: (e) => {
+                e.target.onerror = null;
+                e.target.src = fallbackImage;
+              }
+            }));
+            
+            setItems(itemsWithFallback);
+          })
+          .catch(error => {
+            console.error("Error fetching explore items:", error);
+            // Fall back to static data on error
+            const itemsWithFallback = staticData.data.map(item => ({
+              ...item,
+              handleImageError: (e) => {
+                e.target.onerror = null;
+                e.target.src = fallbackImage;
+              }
+            }));
+            setItems(itemsWithFallback);
+          });
       } catch (error) {
-        console.error("Error fetching explore items:", error);
-        // Fall back to static data on error
-        const itemsWithFallback = staticData.data.map(item => ({
-          ...item,
-          handleImageError: (e) => {
-            e.target.onerror = null;
-            e.target.src = fallbackImage;
-          }
-        }));
-        setItems(itemsWithFallback);
+        console.error("Error in fetchExploreItems:", error);
       }
     };
     

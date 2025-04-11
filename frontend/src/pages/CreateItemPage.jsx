@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, ArrowUpTrayIcon, PlayCircleIcon, PhotoIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config';
 import useAuthStore from '../stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
@@ -124,7 +125,7 @@ const CreateItemPage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitError('');
     if (!validateForm()) {
@@ -132,50 +133,19 @@ const CreateItemPage = () => {
       return;
     }
     setIsSubmitting(true);
-    try {
-      // Get API base URL from environment variables with fallback
-      const baseURL = import.meta.env.VITE_API_BASE_URL || '';
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
-      
-      // First, upload the main image if available
-      let imageUrl = null;
-      const mainImage = files.find(f => f.type === 'image');
-      
-      // If we have an image file, upload it first
-      if (mainImage) {
-        const imageFormData = new FormData();
-        imageFormData.append('file', mainImage.file);
-        
-        try {
-          console.log('Uploading main image...');
-          const imageUploadResponse = await fetch(`${baseURL}/api/v1/uploads/image`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            },
-            body: imageFormData
-          });
-          
-          if (!imageUploadResponse.ok) {
-            const errorText = await imageUploadResponse.text();
-            console.error('Image upload failed:', errorText);
-            throw new Error('Failed to upload image: ' + (imageUploadResponse.statusText || errorText));
-          }
-          
-          const imageData = await imageUploadResponse.json();
-          imageUrl = imageData.url;
-          console.log('Image uploaded successfully:', imageUrl);
-        } catch (imageError) {
-          console.error('Failed to upload image:', imageError);
-          // We'll continue with item creation even if image upload fails
-        }
-      }
-      
-      // Create the cultural item with JSON payload matching the API schema
+    
+    const baseURL = API_BASE_URL;
+    const token = localStorage.getItem('token') || useAuthStore.getState().token;
+    
+    if (!token) {
+      setIsSubmitting(false);
+      throw new Error('Authentication token not found. Please log in again.');
+    }
+    
+    let imageUrl = null;
+    const mainImage = files.find(f => f.type === 'image');
+    
+    const createItem = (imageUrl) => {
       const itemData = {
         title: formData.name,
         description: formData.description,
@@ -183,93 +153,139 @@ const CreateItemPage = () => {
         region: formData.location,
         historical_significance: formData.significance,
         image_url: imageUrl,
-        // Convert category to a tag array if needed by the API
         tags: formData.category ? [{ name: formData.category }] : []
       };
       
       console.log('Creating cultural item with data:', itemData);
       
-      // Create the item
-      const response = await fetch(`${baseURL}/api/v1/cultural-items`, {
+      return fetch(`${baseURL}/api/v1/cultural-items`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(itemData)
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Item creation failed:', errorText);
-        let errorMessage = 'Failed to create item';
-        
-        try {
-          // Try to parse error JSON if available
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch (e) {
-          // If not JSON, use the raw text
-          errorMessage = errorText || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      const newItem = await response.json();
-      console.log('Item created successfully:', newItem);
-      
-      // If we have additional files, upload them as media
-      if (files.length > 1 && newItem.id) {
-        const mediaUploadPromises = [];
-        
-        for (const fileObj of files) {
-          if (fileObj === mainImage) continue; // Skip main image already uploaded
-          
-          const mediaFormData = new FormData();
-          mediaFormData.append('file', fileObj.file);
-          mediaFormData.append('cultural_item_id', newItem.id);
-          mediaFormData.append('media_type', fileObj.type);
-          mediaFormData.append('title', fileObj.file.name);
-          
-          const mediaPromise = fetch(`${baseURL}/api/v1/cultural-items/${newItem.id}/media`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            },
-            body: mediaFormData
-          }).catch(err => {
-            console.error(`Failed to upload media ${fileObj.file.name}:`, err);
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(errorText => {
+            console.error('Item creation failed:', errorText);
+            let errorMessage = 'Failed to create item';
+            
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.detail || errorData.message || errorMessage;
+            } catch (e) {
+              errorMessage = errorText || errorMessage;
+            }
+            
+            throw new Error(errorMessage);
           });
-          
-          mediaUploadPromises.push(mediaPromise);
         }
+        return response.json();
+      });
+    };
+    
+    const uploadMediaFiles = (itemId) => {
+      if (files.length <= 1 || !itemId) return Promise.resolve();
+      
+      const mediaUploadPromises = [];
+      
+      for (const fileObj of files) {
+        if (fileObj === mainImage) continue;
         
-        // Wait for all media uploads but don't fail if some fail
-        await Promise.allSettled(mediaUploadPromises);
+        const mediaFormData = new FormData();
+        mediaFormData.append('file', fileObj.file);
+        mediaFormData.append('cultural_item_id', itemId);
+        mediaFormData.append('media_type', fileObj.type);
+        mediaFormData.append('title', fileObj.file.name);
+        
+        const mediaPromise = fetch(`${baseURL}/api/v1/cultural-items/${itemId}/media`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: mediaFormData
+        }).catch(err => {
+          console.error(`Failed to upload media file ${fileObj.file.name}:`, err);
+          return null;
+        });
+        
+        mediaUploadPromises.push(mediaPromise);
       }
       
-      setSubmitSuccess(true);
-      setFormData({
-        name: '',
-        category: '',
-        era: '',
-        location: '',
-        significance: '',
-        description: ''
-      });
-      setFiles([]);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => {
-        navigate(`/items/${newItem.id}`);
-      }, 2000);
-    } catch (error) {
-      console.error('Error submitting item:', error);
-      setSubmitError(error.message || 'Failed to create item. Please try again later.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } finally {
-      setIsSubmitting(false);
-    }
+      return Promise.all(mediaUploadPromises);
+    };
+    
+    const processRequest = () => {
+      let imageUploadPromise;
+      
+      if (mainImage) {
+        console.log('Uploading main image...');
+        const imageFormData = new FormData();
+        imageFormData.append('file', mainImage.file);
+        
+        imageUploadPromise = fetch(`${baseURL}/api/v1/uploads/image`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: imageFormData
+        })
+        .then(imageUploadResponse => {
+          if (!imageUploadResponse.ok) {
+            return imageUploadResponse.text().then(errorText => {
+              console.error('Image upload failed:', errorText);
+              throw new Error('Failed to upload image: ' + (imageUploadResponse.statusText || errorText));
+            });
+          }
+          return imageUploadResponse.json();
+        })
+        .then(imageData => {
+          console.log('Image uploaded successfully:', imageData.url);
+          return imageData.url;
+        })
+        .catch(imageError => {
+          console.error('Failed to upload image:', imageError);
+          return null;
+        });
+      } else {
+        imageUploadPromise = Promise.resolve(null);
+      }
+      
+      return imageUploadPromise
+        .then(imgUrl => createItem(imgUrl))
+        .then(newItem => {
+          console.log('Item created successfully:', newItem);
+          return uploadMediaFiles(newItem.id).then(() => newItem);
+        })
+        .then(newItem => {
+          setSubmitSuccess(true);
+          setFormData({
+            name: '',
+            category: '',
+            era: '',
+            location: '',
+            significance: '',
+            description: ''
+          });
+          setFiles([]);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          setTimeout(() => {
+            navigate(`/items/${newItem.id}`);
+          }, 2000);
+        })
+        .catch(error => {
+          console.error('Error submitting item:', error);
+          setSubmitError(error.message || 'Failed to create item. Please try again later.');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    };
+    
+    processRequest();
   };
 
   if (isLoading) {

@@ -13,7 +13,7 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Fix tokenUrl to match actual API structure
+# Fix tokenUrl to match actual API structure - include the full path that matches the frontend
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,44 +41,90 @@ def token_urlsafe(nbytes=None) -> str:
 
 
 def create_database_token(user_id: UUID, db: Session) -> Token:
-    randomized_token = token_urlsafe()
+    randomized_token = token_urlsafe(64)  # Increased length for better security
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # Check if user has existing tokens and revoke them
+    existing_tokens = db.execute(
+        select(Token).where(Token.user_id == user_id, Token.is_revoked == False)
+    ).scalars().all()
+    
+    for token in existing_tokens:
+        token.is_revoked = True
+    
+    # Create new token
     new_token = Token(token=randomized_token, user_id=user_id, expires_at=expires_at)
     db.add(new_token)
     db.commit()
+    db.refresh(new_token)
+    
+    # Ensure the user relationship is loaded
+    db.refresh(new_token, attribute_names=['user'])
+    
     return new_token
 
 
 def verify_token_access(token_str: str, db: Session) -> Token:
-    max_age = timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    token = (
-        db.execute(
-            select(Token).where(
-                Token.token == token_str,
-                Token.expires_at > datetime.now(UTC),
-                Token.created_at >= datetime.now(UTC) - max_age,  # Fixed attribute name
-                Token.is_revoked == False,
+    try:
+        token = (
+            db.execute(
+                select(Token).where(
+                    Token.token == token_str,
+                    Token.expires_at > datetime.now(UTC),
+                    Token.is_revoked == False,
+                )
             )
+            .scalars()
+            .first()
         )
-        .scalars()
-        .first()
-    )
-    if not token:
-        # Log token validation failure for debugging
-        print(f"Token validation failed for token: {token_str}")
+        
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token invalid or expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Ensure the user relationship is loaded
+        db.refresh(token, attribute_names=['user'])
+        
+        if not token.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        # Check if token is about to expire and extend it if needed
+        time_until_expiry = token.expires_at - datetime.now(UTC)
+        # If token will expire in less than 10% of its original lifetime, extend it
+        if time_until_expiry < timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 0.1):
+            token.expires_at = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            db.commit()
+            
+        return token
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalid or expired",
+            detail=f"Authentication error: {str(e)}",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return token
 
 
 def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
 ) -> User:
-    token = verify_token_access(token_str=token, db=db)
-    user = token.user
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    token_obj = verify_token_access(token_str=token, db=db)
+    user = token_obj.user
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

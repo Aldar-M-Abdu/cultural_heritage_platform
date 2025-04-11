@@ -15,78 +15,124 @@ const useAuthStore = create(
       notifications: [],
       unreadNotificationsCount: 0,
 
-      login: async (credentials) => {
+      login: (credentials) => {
         set({ isLoading: true, error: null });
         
-        try {
-          // Use the correct endpoint (/token instead of /login) for database token authentication
-          const response = await fetch(`${API_BASE_URL}/api/v1/auth/token`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            // Use URLSearchParams to format data as form fields
-            // Send email as username since backend expects 'username'
-            body: new URLSearchParams({
-              'username': credentials.email,
-              'password': credentials.password,
-            }),
-            credentials: 'include'
-          });
-          
-          const data = await response.json();
-          
+        return fetch(`${API_BASE_URL}/api/v1/auth/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'username': credentials.email,
+            'password': credentials.password,
+          }),
+          credentials: 'include'
+        })
+        .then(response => {
+          // First check if the response is ok
           if (!response.ok) {
-            const errorMessage = data.detail || data.message || 'Invalid email or password. Please try again.';
-            
+            // Parse the error response
+            return response.json().then(data => {
+              const errorMessage = data.detail || data.message || 'Invalid email or password. Please try again.';
+              set({ 
+                error: errorMessage, 
+                isLoading: false,
+                user: null,
+                token: null,
+                isAuthenticated: false
+              });
+              throw new Error(errorMessage);
+            }).catch(err => {
+              // If JSON parsing fails, use status text
+              const errorMessage = `Authentication failed (${response.status}): ${response.statusText}`;
+              set({ 
+                error: errorMessage, 
+                isLoading: false,
+                user: null,
+                token: null,
+                isAuthenticated: false
+              });
+              throw new Error(errorMessage);
+            });
+          }
+          
+          // For successful response, parse the JSON
+          return response.json();
+        })
+        .then(data => {
+          // Handle successful login with database token
+          const token = data.access_token;
+          
+          // Validate token format before storing
+          if (!token || typeof token !== 'string' || token.length < 10) {
+            const errorMessage = 'Invalid token received from server';
             set({ 
               error: errorMessage, 
-              isLoading: false 
+              isLoading: false,
+              user: null,
+              token: null,
+              isAuthenticated: false
             });
-            
             throw new Error(errorMessage);
           }
           
-          // Handle successful login with database token
-          localStorage.setItem('token', data.access_token);
+          // Store token in localStorage
+          localStorage.setItem('token', token);
           
-          // Fetch user data since the token endpoint doesn't return user data
-          const userResponse = await fetch(`${API_BASE_URL}/api/v1/auth/current-user`, {
+          // Fetch user data with the token
+          return fetch(`${API_BASE_URL}/api/v1/auth/current-user`, {
+            method: 'GET',
             headers: {
-              'Authorization': `Bearer ${data.access_token}`
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          })
+          .then(userResponse => {
+            if (!userResponse.ok) {
+              // Clear token if user data fetch fails
+              localStorage.removeItem('token');
+              const status = userResponse.status;
+              if (status === 401) {
+                throw new Error('Token authentication failed. Please login again.');
+              }
+              throw new Error(`Failed to fetch user details (${status})`);
             }
-          });
-          
-          if (!userResponse.ok) {
-            throw new Error('Failed to fetch user data');
-          }
-          
-          const userData = await userResponse.json();
-          
-          set({ 
-            user: userData,
-            token: data.access_token,
-            isAuthenticated: true,
-            isLoading: false
-          });
-          
-          return { token: data.access_token, user: userData };
-        } catch (err) {
-          // If err doesn't have a response property, it's likely a network error
-          if (!err.response && !err.message.includes('failed')) {
+            return userResponse.json();
+          })
+          .then(userData => {
+            // Ensure we have user data before confirming authentication
+            if (!userData || !userData.id) {
+              localStorage.removeItem('token');
+              throw new Error('Invalid user data received');
+            }
+            
+            // Set authentication state
             set({ 
-              error: 'Network error. Please check your connection.', 
-              isLoading: false 
+              user: userData,
+              token: token,
+              isAuthenticated: true,
+              isLoading: false,
+              error: null
             });
-            throw new Error('Network error. Please check your connection.');
-          }
-          
+            
+            console.log('Authentication successful:', { userId: userData.id, tokenPresent: !!token });
+            return { user: userData, token: token };
+          });
+        })
+        .catch(err => {
+          console.error('Login error:', err);
+          // Ensure authentication state is cleared on error
           set({ 
-            error: err.message || 'Login failed', 
-            isLoading: false 
+            error: err.message || 'An error occurred during login. Please try again.', 
+            isLoading: false,
+            token: null,
+            user: null,
+            isAuthenticated: false
           });
           throw err;
-        }
+        });
       },
 
       register: async (userData) => {
@@ -150,14 +196,15 @@ const useAuthStore = create(
 
         set({ isLoading: true, error: null });
         try {
-            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-            // Use a single, reliable endpoint
             const endpoint = `${API_BASE_URL}/api/v1/auth/current-user`;
             
             const response = await fetch(endpoint, {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
             });
                 
             if (!response.ok) {
@@ -168,19 +215,23 @@ const useAuthStore = create(
                     throw new Error(`Failed to fetch user data: ${response.status}`);
                 }
             }
-            
+
             const userData = await response.json();
             set({ 
-                user: userData,
+                user: userData, 
                 isAuthenticated: true,
-                error: null 
+                isLoading: false 
             });
             return userData;
         } catch (err) {
-            set({ error: err.message });
-            throw err;
-        } finally {
-            set({ isLoading: false });
+            console.error('Error fetching user data:', err);
+            set({ 
+                error: err.message || 'Failed to fetch user data',
+                isLoading: false 
+            });
+            if (err.message.includes('expired') || err.message.includes('401')) {
+                get().logout();
+            }
         }
       },
 
@@ -247,45 +298,48 @@ const useAuthStore = create(
       },
 
       checkAuth: async () => {
-        const { token } = get();
+        // Check if token exists
+        const token = localStorage.getItem('token');
         if (!token) {
-          set({ isAuthenticated: false, user: null });
+          set({ isAuthenticated: false, user: null, token: null });
           return false;
         }
-
+        
+        // Set token from localStorage
+        set({ token });
+        
         try {
+          // Verify token by fetching current user
           await get().fetchUser();
           return true;
         } catch (error) {
+          console.error('Token validation failed:', error);
           return false;
         }
       },
 
       logout: async () => {
-        // Try to revoke the token on the server
         try {
-          const { token } = get();
+          const token = localStorage.getItem('token');
           if (token) {
+            // Try to revoke the token on the server
             await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
               method: 'DELETE',
               headers: {
                 'Authorization': `Bearer ${token}`
               }
-            });
+            }).catch(err => console.error('Logout error:', err));
           }
-        } catch (error) {
-          console.error("Error during logout:", error);
+        } finally {
+          // Always clear local state regardless of server response
+          localStorage.removeItem('token');
+          set({ 
+            user: null, 
+            token: null, 
+            isAuthenticated: false,
+            error: null
+          });
         }
-
-        // Always clear local state regardless of server response
-        localStorage.removeItem('token');
-        localStorage.removeItem('persistAuth');
-        set({ 
-          token: null, 
-          user: null, 
-          isAuthenticated: false, 
-          error: null 
-        });
       },
 
       clearError: () => set({ error: null }),
@@ -614,12 +668,11 @@ const useAuthStore = create(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => {
-        const persistAuth = localStorage.getItem('persistAuth') === 'true';
-        return {
-          token: persistAuth ? state.token : null
-        };
-      }
+      partialize: (state) => ({ 
+        token: state.token,
+        user: state.user,
+        isAuthenticated: state.isAuthenticated
+      })
     }
   )
 );

@@ -19,3 +19,14 @@ The platform is designed to handle large datasets efficiently:
 - User accounts with favorites/bookmarking functionality
 - Advanced search capabilities across the entire collection
 - Mobile-responsive design for access on all devices
+
+## API Configuration
+
+The frontend automatically tries multiple API endpoint formats to find the working backend URL.
+If you need to manually configure the API endpoint, you can set the `VITE_API_BASE_URL` environment variable.
+
+Examples:
+- Local development: `VITE_API_BASE_URL=http://localhost:8000`
+- Production: `VITE_API_BASE_URL=https://api.cultural-heritage.example.com`
+
+If no base URL is provided, the application will make relative requests and try several common API path patterns.

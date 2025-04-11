@@ -34,7 +34,7 @@ const LoginPage = () => {
     }
   }, [error]);
   
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMessage(''); // Clear previous error messages
     
@@ -49,13 +49,25 @@ const LoginPage = () => {
       return;
     }
     
-    try {
-      await login({ email, password, rememberMe });
-      // The useEffect above will handle redirection on successful login
-    } catch (err) {
-      // Error handling is done by the store and useEffect
-      console.error('Login error:', err);
+    // Show loading state
+    const loginBtn = e.target.querySelector('button[type="submit"]');
+    if (loginBtn) {
+      loginBtn.disabled = true;
     }
+    
+    login({ email, password, rememberMe })
+      .then(() => {
+        // Success handled by the useEffect for isAuthenticated
+      })
+      .catch(err => {
+        // Error handling is done by the store and useEffect
+        console.error('Login error:', err);
+        // Make sure the button is re-enabled on error
+        if (loginBtn) {
+          loginBtn.disabled = false;
+        }
+      });
+    // The useEffect above will handle redirection on successful login
   };
 
   const handleInputChange = (setter) => (e) => {

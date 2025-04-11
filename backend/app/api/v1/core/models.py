@@ -186,6 +186,9 @@ class Event(Base):
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    event_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
     # Relationships
     cultural_items: Mapped[List["CulturalItem"]] = relationship(secondary=event_cultural_item, back_populates="events")

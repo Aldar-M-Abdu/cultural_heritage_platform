@@ -16,9 +16,14 @@ async def get_placeholder_image(width: int, height: int):
     # Try to get a font size that will fit the image
     font_size = min(width, height) // 4
     
-    # Draw the text in the center of the image
-    w, h = draw.textsize(text)
-    draw.text(((width-w)/2, (height-h)/2), text, fill=(80, 80, 80))
+    try:
+        # Try to use a default font if available
+        font = ImageFont.load_default()
+        text_width, text_height = draw.textbbox((0, 0), text, font=font)[2:4]
+        draw.text(((width-text_width)/2, (height-text_height)/2), text, fill=(80, 80, 80), font=font)
+    except Exception:
+        # Fallback method if font loading fails
+        draw.text((width//2, height//2), text, fill=(80, 80, 80))
     
     # Save the image to a bytes buffer
     buffer = BytesIO()
