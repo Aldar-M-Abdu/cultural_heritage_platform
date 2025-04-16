@@ -1,7 +1,8 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, desc, asc
+from datetime import datetime, timedelta, UTC
 
 from app.api.v1.core.models import (
     CulturalItem,
@@ -10,6 +11,11 @@ from app.api.v1.core.models import (
     cultural_item_tag,
     Category,
     Event,
+    User,
+    Comment,
+    BlogPost,
+    Community,
+    Discussion
 )
 from app.api.v1.core.schemas import (
     CulturalItemCreate,
@@ -17,45 +23,59 @@ from app.api.v1.core.schemas import (
     MediaCreate,
 )
 
-def get_cultural_items(db: Session, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
-    """Get cultural items with improved querying and debugging"""
-    try:
-        # First check if there are any items in the database
-        count = db.query(func.count(CulturalItem.id)).scalar()
-        print(f"Total cultural items in database: {count}")
-        
-        # If no items found, log this for debugging
-        if count == 0:
-            print("WARNING: No cultural items found in database!")
-            return []
-        
-        # Apply pagination with a larger limit if needed
-        if count < 100:
-            # If fewer than 100 items, return all of them
-            result = db.query(CulturalItem).all()
+def get_cultural_items(
+    db: Session, 
+    skip: int = 0, 
+    limit: int = 100, 
+    sort_by: str = "created_at",
+    sort_order: str = "desc"
+) -> List[CulturalItem]:
+    """Get paginated cultural items with sorting options"""
+    query = db.query(CulturalItem)
+    
+    # Apply sorting
+    if sort_by == "created_at":
+        if sort_order == "desc":
+            query = query.order_by(desc(CulturalItem.created_at))
         else:
-            # Otherwise paginate normally
-            result = db.query(CulturalItem).offset(skip).limit(limit).all()
-        
-        print(f"Retrieved {len(result)} cultural items")
-        return result
-    except Exception as e:
-        print(f"Error retrieving cultural items: {str(e)}")
-        # Return empty list on error rather than raising exception
-        # This prevents the API from crashing but logs the error
-        return []
+            query = query.order_by(asc(CulturalItem.created_at))
+    elif sort_by == "title":
+        if sort_order == "desc":
+            query = query.order_by(desc(CulturalItem.title))
+        else:
+            query = query.order_by(asc(CulturalItem.title))
+    elif sort_by == "views":
+        if sort_order == "desc":
+            query = query.order_by(desc(CulturalItem.view_count))
+        else:
+            query = query.order_by(asc(CulturalItem.view_count))
+            
+    return query.offset(skip).limit(limit).all()
 
-def search_cultural_items(db: Session, query: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
-    search = f"%{query}%"
+def get_cultural_item_count(db: Session) -> int:
+    """Get the total count of cultural items"""
+    return db.query(func.count(CulturalItem.id)).scalar()
+
+def get_cultural_item(db: Session, item_id: UUID) -> Optional[CulturalItem]:
+    """Get a specific cultural item by ID"""
+    return db.query(CulturalItem).filter(CulturalItem.id == item_id).first()
+
+def get_featured_cultural_items(db: Session, limit: int = 5) -> List[CulturalItem]:
+    """Get featured cultural items"""
+    return db.query(CulturalItem).filter(CulturalItem.is_featured == True).limit(limit).all()
+
+def get_random_cultural_items(db: Session, limit: int = 10) -> List[CulturalItem]:
+    """Get random cultural items"""
+    # Using random() SQL function for PostgreSQL
+    return db.query(CulturalItem).order_by(func.random()).limit(limit).all()
+
+def search_cultural_items(db: Session, query: str, limit: int = 20) -> List[CulturalItem]:
+    """Search cultural items by title or description"""
+    search_pattern = f"%{query}%"
     return db.query(CulturalItem).filter(
-        or_(
-            CulturalItem.title.ilike(search),
-            CulturalItem.description.ilike(search),
-            CulturalItem.region.ilike(search),
-            CulturalItem.time_period.ilike(search),
-            CulturalItem.historical_significance.ilike(search)
-        )
-    ).offset(skip).limit(limit).all()
+        (CulturalItem.title.ilike(search_pattern)) | 
+        (CulturalItem.description.ilike(search_pattern))
+    ).limit(limit).all()
 
 def get_all_tags(db: Session, skip: int = 0, limit: int = 100) -> List[Tag]:
     return db.query(Tag).offset(skip).limit(limit).all()
@@ -71,10 +91,6 @@ def get_cultural_items_by_region(db: Session, region: str, skip: int = 0, limit:
 
 def get_cultural_items_by_time_period(db: Session, time_period: str, skip: int = 0, limit: int = 100) -> List[CulturalItem]:
     return db.query(CulturalItem).filter(CulturalItem.time_period.ilike(f"%{time_period}%")).offset(skip).limit(limit).all()
-
-def get_featured_cultural_items(db: Session, skip: int = 0, limit: int = 10) -> List[CulturalItem]:
-    """Get cultural items that are marked as featured."""
-    return db.query(CulturalItem).filter(CulturalItem.is_featured == True).offset(skip).limit(limit).all()
 
 def get_cultural_item(db: Session, cultural_item_id: UUID) -> Optional[CulturalItem]:
     return db.query(CulturalItem).filter(CulturalItem.id == cultural_item_id).first()
@@ -198,22 +214,67 @@ def create_category(db: Session, name: str) -> Category:
     db.refresh(db_category)
     return db_category
 
+def get_all_blog_posts(db: Session, skip: int = 0, limit: int = 100) -> List[BlogPost]:
+    """Get all blog posts with pagination"""
+    return db.query(BlogPost).order_by(desc(BlogPost.created_at)).offset(skip).limit(limit).all()
+
+def get_blog_categories(db: Session) -> List[Category]:
+    """Get all blog categories"""
+    return db.query(Category).all()
+
+def get_blog_post(db: Session, post_id: UUID) -> Optional[BlogPost]:
+    """Get a specific blog post by ID"""
+    return db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+def get_blog_posts_by_category(db: Session, category_name: str, skip: int = 0, limit: int = 100) -> List[BlogPost]:
+    """Get blog posts by category"""
+    return db.query(BlogPost).filter(BlogPost.category_name == category_name).order_by(desc(BlogPost.created_at)).offset(skip).limit(limit).all()
+
 def get_all_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
-    """Get all events"""
-    return db.query(Event).offset(skip).limit(limit).all()
+    """Get all events with pagination"""
+    return db.query(Event).order_by(Event.start_date).offset(skip).limit(limit).all()
 
 def get_event(db: Session, event_id: UUID) -> Optional[Event]:
     """Get a specific event by ID"""
     return db.query(Event).filter(Event.id == event_id).first()
 
 def get_upcoming_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
-    """Get upcoming events (where start_date is in the future)"""
-    from datetime import datetime
-    now = datetime.utcnow()
+    """Get upcoming events (events that start in the future)"""
+    now = datetime.now(UTC)
     return db.query(Event).filter(Event.start_date > now).order_by(Event.start_date).offset(skip).limit(limit).all()
 
 def get_past_events(db: Session, skip: int = 0, limit: int = 100) -> List[Event]:
-    """Get past events (where start_date is in the past)"""
-    from datetime import datetime
-    now = datetime.utcnow()
-    return db.query(Event).filter(Event.start_date <= now).order_by(Event.start_date.desc()).offset(skip).limit(limit).all()
+    """Get past events (events that already started)"""
+    now = datetime.now(UTC)
+    return db.query(Event).filter(Event.start_date <= now).order_by(desc(Event.start_date)).offset(skip).limit(limit).all()
+
+def get_all_communities(db: Session, skip: int = 0, limit: int = 100) -> List[Community]:
+    """Get all communities with pagination"""
+    return db.query(Community).offset(skip).limit(limit).all()
+
+def get_community(db: Session, community_id: UUID) -> Optional[Community]:
+    """Get a specific community by ID"""
+    return db.query(Community).filter(Community.id == community_id).first()
+
+def get_community_by_slug(db: Session, slug: str) -> Optional[Community]:
+    """Get a specific community by slug"""
+    return db.query(Community).filter(Community.slug == slug).first()
+
+def get_community_discussions(
+    db: Session, 
+    community_id: UUID, 
+    skip: int = 0, 
+    limit: int = 100,
+    category: Optional[str] = None
+) -> List[Discussion]:
+    """Get discussions for a specific community"""
+    query = db.query(Discussion).filter(Discussion.community_id == community_id)
+    
+    if category and category != "all":
+        query = query.filter(Discussion.category == category)
+        
+    return query.order_by(Discussion.is_pinned.desc(), desc(Discussion.updated_at)).offset(skip).limit(limit).all()
+
+def get_discussion(db: Session, discussion_id: UUID) -> Optional[Discussion]:
+    """Get a specific discussion by ID"""
+    return db.query(Discussion).filter(Discussion.id == discussion_id).first()

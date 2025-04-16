@@ -16,123 +16,187 @@ const useAuthStore = create(
       unreadNotificationsCount: 0,
 
       login: (credentials) => {
-        set({ isLoading: true, error: null });
+        // Multiple endpoint formats to try for login
+        const loginEndpoints = [
+          `${API_BASE_URL}/api/v1/auth/token`,
+          `${API_BASE_URL}/auth/token`,
+          `${API_BASE_URL}/api/auth/token`,
+          `/api/v1/auth/token`
+        ];
         
-        return fetch(`${API_BASE_URL}/api/v1/auth/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            'username': credentials.email,
-            'password': credentials.password,
-          }),
-          credentials: 'include'
-        })
-        .then(response => {
-          // First check if the response is ok
-          if (!response.ok) {
-            // Parse the error response
-            return response.json().then(data => {
-              const errorMessage = data.detail || data.message || 'Invalid email or password. Please try again.';
-              set({ 
-                error: errorMessage, 
-                isLoading: false,
-                user: null,
-                token: null,
-                isAuthenticated: false
+        // Create AbortController for the entire login process
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        const tryLogin = async () => {
+          let response = null;
+          let lastError = null;
+          
+          // Try each endpoint until one works
+          for (const endpoint of loginEndpoints) {
+            try {
+              console.log(`Trying login endpoint: ${endpoint}`);
+              
+              response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                  'username': credentials.email,
+                  'password': credentials.password,
+                }),
+                credentials: 'include',
+                signal: controller.signal
               });
-              throw new Error(errorMessage);
-            }).catch(err => {
-              // If JSON parsing fails, use status text
-              const errorMessage = `Authentication failed (${response.status}): ${response.statusText}`;
-              set({ 
-                error: errorMessage, 
-                isLoading: false,
-                user: null,
-                token: null,
-                isAuthenticated: false
-              });
-              throw new Error(errorMessage);
-            });
+              
+              if (!response.ok) {
+                // Handle specific HTTP status codes with custom messages
+                if (response.status === 401) {
+                  throw new Error('Invalid email or password. Please try again.');
+                } else if (response.status === 403) {
+                  throw new Error('Your account is locked. Please contact support.');
+                } else if (response.status === 429) {
+                  throw new Error('Too many login attempts. Please try again later.');
+                } else if (response.status >= 500) {
+                  throw new Error('Server error. Please try again later.');
+                }
+                
+                // Try to get error details from response
+                try {
+                  const errorData = await response.json();
+                  throw new Error(errorData?.detail || errorData?.message || `Error (${response.status}): ${response.statusText}`);
+                } catch (jsonError) {
+                  throw new Error(`Error (${response.status}): ${response.statusText}`);
+                }
+              }
+              
+              // If we get here, the endpoint worked
+              break;
+            } catch (error) {
+              lastError = error;
+              // If this isn't a server error, try the next endpoint
+              if (!error.message.includes('Server error')) {
+                console.warn(`Login endpoint ${endpoint} failed:`, error);
+                continue;
+              }
+              throw error; // Rethrow server errors
+            }
           }
           
-          // For successful response, parse the JSON
-          return response.json();
-        })
-        .then(data => {
-          // Handle successful login with database token
-          const token = data.access_token;
-          
-          // Validate token format before storing
-          if (!token || typeof token !== 'string' || token.length < 10) {
-            const errorMessage = 'Invalid token received from server';
-            set({ 
-              error: errorMessage, 
-              isLoading: false,
-              user: null,
-              token: null,
-              isAuthenticated: false
-            });
-            throw new Error(errorMessage);
+          if (!response || !response.ok) {
+            throw lastError || new Error('All login endpoints failed');
           }
           
-          // Store token in localStorage
+          // Parse the successful response
+          const data = await response.json();
+          const token = data.access_token || data.token;
+          
+          if (!token) {
+            throw new Error('Invalid response from server: missing token');
+          }
+          
+          // Store token in localStorage and state
           localStorage.setItem('token', token);
           
-          // Fetch user data with the token
-          return fetch(`${API_BASE_URL}/api/v1/auth/current-user`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          })
-          .then(userResponse => {
-            if (!userResponse.ok) {
-              // Clear token if user data fetch fails
-              localStorage.removeItem('token');
-              const status = userResponse.status;
-              if (status === 401) {
-                throw new Error('Token authentication failed. Please login again.');
+          // Clear any previous auth errors
+          set({ error: null, token });
+          
+          // Now fetch the user info
+          const userEndpoints = [
+            `${API_BASE_URL}/api/v1/auth/current-user`,
+            `${API_BASE_URL}/api/v1/users/me`,
+            `${API_BASE_URL}/api/v1/auth/me`,
+            `/api/v1/users/me`
+          ];
+          
+          let userData = null;
+          
+          for (const userEndpoint of userEndpoints) {
+            try {
+              console.log(`Trying user endpoint: ${userEndpoint}`);
+              
+              const userResponse = await fetch(userEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                signal: controller.signal
+              });
+              
+              if (!userResponse.ok) {
+                if (userResponse.status === 401) {
+                  localStorage.removeItem('token');
+                  throw new Error('Authentication failed. Please login again.');
+                } else if (userResponse.status === 404) {
+                  localStorage.removeItem('token');
+                  throw new Error('User account not found.');
+                } else if (userResponse.status >= 500) {
+                  // For server errors, we can still keep the token but report the error
+                  throw new Error('Error loading user profile. Please try refreshing the page.');
+                }
+                throw new Error(`Failed to fetch user details (${userResponse.status})`);
               }
-              throw new Error(`Failed to fetch user details (${status})`);
+              
+              userData = await userResponse.json();
+              
+              if (!userData || !userData.id) {
+                localStorage.removeItem('token');
+                throw new Error('Invalid user data received');
+              }
+              
+              // Success! Break out of the loop
+              break;
+            } catch (error) {
+              console.warn(`User endpoint ${userEndpoint} failed:`, error);
+              // Continue to next endpoint unless it's an auth error
+              if (error.message.includes('Authentication failed') || 
+                  error.message.includes('User account not found') ||
+                  error.message.includes('Invalid user data')) {
+                throw error;
+              }
             }
-            return userResponse.json();
-          })
-          .then(userData => {
-            // Ensure we have user data before confirming authentication
-            if (!userData || !userData.id) {
-              localStorage.removeItem('token');
-              throw new Error('Invalid user data received');
-            }
+          }
+          
+          if (!userData) {
+            throw new Error('Failed to fetch user profile. Please try again.');
+          }
+          
+          // Set authentication state
+          set({ 
+            user: userData,
+            token: token,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null
+          });
+          
+          return { user: userData, token: token };
+        };
+        
+        set({ isLoading: true, error: null });
+        
+        return tryLogin()
+          .catch(err => {
+            console.error('Login error:', err);
             
-            // Set authentication state
+            // Clear authentication state on error
+            localStorage.removeItem('token');
             set({ 
-              user: userData,
-              token: token,
-              isAuthenticated: true,
+              error: err.message || 'An error occurred during login. Please try again.', 
               isLoading: false,
-              error: null
+              token: null,
+              user: null,
+              isAuthenticated: false
             });
             
-            console.log('Authentication successful:', { userId: userData.id, tokenPresent: !!token });
-            return { user: userData, token: token };
+            throw err;
+          })
+          .finally(() => {
+            clearTimeout(timeoutId);
           });
-        })
-        .catch(err => {
-          console.error('Login error:', err);
-          // Ensure authentication state is cleared on error
-          set({ 
-            error: err.message || 'An error occurred during login. Please try again.', 
-            isLoading: false,
-            token: null,
-            user: null,
-            isAuthenticated: false
-          });
-          throw err;
-        });
       },
 
       register: async (userData) => {
@@ -191,48 +255,106 @@ const useAuthStore = create(
       },
 
       fetchUser: async () => {
-        const { token } = get();
+        const token = get().token || localStorage.getItem('token');
         if (!token) return;
 
         set({ isLoading: true, error: null });
-        try {
-            const endpoint = `${API_BASE_URL}/api/v1/auth/current-user`;
+        
+        // Array of endpoints to try with improved error handling
+        const endpoints = [
+          `${API_BASE_URL}/api/v1/auth/current-user`,
+          `${API_BASE_URL}/api/v1/auth/me`,
+          `${API_BASE_URL}/api/v1/users/me`,
+          // Add more fallbacks if needed
+        ];
+        
+        let lastError = null;
+        let userDataFetched = false;
+        
+        // Try each endpoint until one works
+        for (const endpoint of endpoints) {
+          if (userDataFetched) break;
+          
+          try {
+            console.log(`Attempting to fetch user data from: ${endpoint}`);
             
             const response = await fetch(endpoint, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              credentials: 'include'
             });
                 
             if (!response.ok) {
-                if (response.status === 401) {
-                    get().logout();
-                    throw new Error('Session expired. Please login again.');
-                } else {
-                    throw new Error(`Failed to fetch user data: ${response.status}`);
-                }
+              const status = response.status;
+              console.warn(`Failed response from ${endpoint}: ${status}`);
+              
+              // Special handling for 401 errors
+              if (status === 401) {
+                console.warn(`Unauthorized response from ${endpoint}: Token may be invalid`);
+                
+                // Try to get response text for better debugging
+                const errorText = await response.text().catch(() => null);
+                console.warn(`Error response content: ${errorText || 'No error content'}`);
+                
+                lastError = new Error(`Session expired. Please login again. (${endpoint})`);
+                
+                // Mark token for clearing upon failure of all endpoints
+                localStorage.setItem('clearToken', 'true');
+                continue; // Try next endpoint
+              } else {
+                lastError = new Error(`Failed to fetch user data: ${status} (${endpoint})`);
+                continue; // Try next endpoint
+              }
             }
 
             const userData = await response.json();
-            set({ 
-                user: userData, 
-                isAuthenticated: true,
-                isLoading: false 
-            });
-            return userData;
-        } catch (err) {
-            console.error('Error fetching user data:', err);
-            set({ 
-                error: err.message || 'Failed to fetch user data',
-                isLoading: false 
-            });
-            if (err.message.includes('expired') || err.message.includes('401')) {
-                get().logout();
+            console.log(`Successfully fetched user data from ${endpoint}`);
+            
+            if (!userData || !userData.id) {
+              console.warn(`Invalid user data from ${endpoint}: missing ID`);
+              lastError = new Error(`Invalid user data from ${endpoint}`);
+              continue; // Try next endpoint
             }
+            
+            // Clear token removal marker if we succeed
+            localStorage.removeItem('clearToken');
+            
+            set({ 
+              user: userData, 
+              isAuthenticated: true,
+              token: token,
+              isLoading: false,
+              error: null
+            });
+            
+            userDataFetched = true;
+            return userData;
+          } catch (err) {
+            console.error(`Error fetching user data from ${endpoint}:`, err);
+            lastError = err;
+            // Continue to next endpoint
+          }
         }
+        
+        // If we get here, all endpoints failed
+        console.error('All user data endpoints failed');
+        set({ 
+          error: lastError?.message || 'Failed to fetch user data',
+          isLoading: false 
+        });
+        
+        if (localStorage.getItem('clearToken') === 'true' || 
+            lastError?.message.includes('expired') || 
+            lastError?.message.includes('401')) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('clearToken');
+          get().logout();
+        }
+        
+        throw lastError || new Error('Failed to fetch user data');
       },
 
       uploadProfileImage: async (imageFile) => {
@@ -298,15 +420,17 @@ const useAuthStore = create(
       },
 
       checkAuth: async () => {
-        // Check if token exists
-        const token = localStorage.getItem('token');
+        // Check if token exists in state or localStorage
+        const token = get().token || localStorage.getItem('token');
         if (!token) {
           set({ isAuthenticated: false, user: null, token: null });
           return false;
         }
         
-        // Set token from localStorage
-        set({ token });
+        // Set token from localStorage to state if not already there
+        if (!get().token) {
+          set({ token });
+        }
         
         try {
           // Verify token by fetching current user

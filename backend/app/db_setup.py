@@ -6,6 +6,16 @@ import logging
 from contextlib import contextmanager
 from dotenv import load_dotenv  # Add this import
 
+# Configure logging to avoid duplicate messages
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
+# Set SQLAlchemy logging level to WARNING to reduce verbosity
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+
 # Load environment variables from .env file
 load_dotenv()  # Add this line
 
@@ -17,6 +27,9 @@ DATABASE_URL = os.getenv("DB_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")  # Add validation
 
+# Get debug flag from environment to control SQLAlchemy logging
+DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() in ("true", "1", "t")
+
 # Create SQLAlchemy engine with better connection pooling and timeout settings
 engine = create_engine(
     DATABASE_URL,
@@ -24,7 +37,7 @@ engine = create_engine(
     pool_recycle=3600,             # Recycle connections after an hour
     pool_size=20,                  # Increase connection pool size
     max_overflow=30,               # Allow more connections when needed
-    echo=True,                     # Log SQL queries for debugging
+    echo=DEBUG_MODE,               # Only log SQL queries in debug mode
     connect_args={"connect_timeout": 30}  # Increased timeout to 30 seconds
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -35,7 +48,7 @@ def is_db_connected():
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1"))
             row = result.fetchone()
-            print(f"Database connection test result: {row}")
+            logging.debug(f"Database connection test result: {row}")
             return True
     except Exception as e:
         logging.error(f"Database connection check failed: {str(e)}")
@@ -53,29 +66,54 @@ def init_db():
         raise
 
 def get_db():
-    """Get database session with improved error handling"""
-    db = SessionLocal()
-    connected = is_db_connected()
-    print(f"Database connected: {connected}")
+    """Get database session with improved error handling and retry logic"""
+    max_retries = 3
+    retry_count = 0
     
-    try:
-        yield db
-    except Exception as e:
-        logging.error(f"Database session error: {str(e)}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
+    while retry_count < max_retries:
+        db = SessionLocal()
+        try:
+            # Test the connection
+            if not is_db_connected():
+                retry_count += 1
+                logging.warning(f"Database connection failed, attempt {retry_count} of {max_retries}")
+                db.close()
+                if retry_count == max_retries:
+                    raise Exception("Failed to connect to database after maximum retries")
+                continue
+            
+            yield db
+            break
+        except Exception as e:
+            logging.error(f"Database session error: {str(e)}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
 @contextmanager
 def get_db_context():
     """Context manager version of get_db for use outside of FastAPI dependency injection"""
-    db = SessionLocal()
-    try:
-        yield db
-    except Exception as e:
-        logging.error(f"Database session error: {str(e)}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        db = SessionLocal()
+        try:
+            # Test the connection
+            if not is_db_connected():
+                retry_count += 1
+                logging.warning(f"Database connection failed, attempt {retry_count} of {max_retries}")
+                db.close()
+                if retry_count == max_retries:
+                    raise Exception("Failed to connect to database after maximum retries")
+                continue
+            
+            yield db
+            break
+        except Exception as e:
+            logging.error(f"Database session error: {str(e)}")
+            db.rollback()
+            raise
+        finally:
+            db.close()

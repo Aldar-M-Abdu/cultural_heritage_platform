@@ -105,7 +105,7 @@ class User(Base):
     profile_image: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Added profile image field
     
     # Relationships
-    tokens: Mapped[List["Token"]] = relationship()
+    tokens: Mapped[List["Token"]] = relationship(back_populates="user")
     favorites: Mapped[List["UserFavorite"]] = relationship(back_populates="user")
     notifications: Mapped[List["Notification"]] = relationship(back_populates="user")
 
@@ -119,6 +119,9 @@ class Token(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    
+    # Add explicit relationship to User
+    user: Mapped["User"] = relationship("User", back_populates="tokens")
 
 
 class Comment(Base):
@@ -230,3 +233,57 @@ class Notification(Base):
     user: Mapped["User"] = relationship(back_populates="notifications")
     cultural_item: Mapped[Optional["CulturalItem"]] = relationship("CulturalItem")
     comment: Mapped[Optional["Comment"]] = relationship("Comment")
+
+
+class Community(Base):
+    __tablename__ = "communities"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    icon: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    slug: Mapped[str] = mapped_column(String(150), nullable=False, unique=True, index=True)
+    moderator_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    
+    # Relationships
+    discussions: Mapped[List["Discussion"]] = relationship(back_populates="community")
+    moderator: Mapped[Optional["User"]] = relationship("User")
+
+
+class Discussion(Base):
+    __tablename__ = "discussions"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    author_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    community_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('communities.id'), nullable=False)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    view_count: Mapped[int] = mapped_column(default=0)
+    category: Mapped[str] = mapped_column(String(50), nullable=True)  # e.g., "general", "research", "identification"
+    
+    # Relationships
+    author: Mapped["User"] = relationship("User")
+    community: Mapped["Community"] = relationship(back_populates="discussions")
+    comments: Mapped[List["DiscussionComment"]] = relationship(back_populates="discussion")
+
+
+class DiscussionComment(Base):
+    __tablename__ = "discussion_comments"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    author_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    discussion_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('discussions.id'), nullable=False)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('discussion_comments.id'), nullable=True)
+    
+    # Relationships
+    author: Mapped["User"] = relationship("User")
+    discussion: Mapped["Discussion"] = relationship(back_populates="comments")
+    replies: Mapped[List["DiscussionComment"]] = relationship("DiscussionComment", backref="parent_comment", remote_side=[id])

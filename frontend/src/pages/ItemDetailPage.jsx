@@ -89,7 +89,8 @@ const ItemDetailPage = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       });
       
       if (!response.ok) {
@@ -103,21 +104,15 @@ const ItemDetailPage = () => {
   };
 
   const handleToggleFavorite = async () => {
-    if (!isAuthenticated) {
-      navigate('/login?redirect=' + encodeURIComponent(`/items/${id}`));
-      return;
-    }
-    
-    setIsFavoriteLoading(true);
     try {
       if (isFavorite) {
-        // Remove from favorites
         await fetch(`${API_BASE_URL}/api/v1/user-favorites/${id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'application/json'
-          }
+          },
+          credentials: 'include'
         });
       } else {
         // Add to favorites
@@ -127,7 +122,8 @@ const ItemDetailPage = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
-          body: JSON.stringify({ cultural_item_id: id })
+          body: JSON.stringify({ cultural_item_id: id }),
+          credentials: 'include'
         });
       }
       

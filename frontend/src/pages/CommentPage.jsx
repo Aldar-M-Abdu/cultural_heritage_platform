@@ -18,28 +18,35 @@ const commentsApi = {
         ...(token && { 'Authorization': `Bearer ${token}` })
       },
       credentials: 'include',
+      mode: 'cors' // Add CORS mode for cross-origin requests
     };
 
     if (data && method !== 'GET') {
       options.body = JSON.stringify(data);
     }
 
-    return fetch(`${baseURL}${endpoint}`, options)
-      .then(response => {
-        if (response.status === 401) {
+    // Check if fetchWithAuth exists in window, otherwise use a fallback
+    const fetcher = window.fetchWithAuth || ((url, opts) => {
+      // Simple fallback if window.fetchWithAuth isn't available yet
+      return fetch(`${baseURL}${url}`, opts)
+        .then(response => {
+          if (response.status === 401) {
+            window.dispatchEvent(new Event('auth:sessionExpired'));
+            throw new Error('Session expired');
+          }
+          if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+          return response.json();
+        });
+    });
+    
+    // Use the fetchWithAuth helper
+    return fetcher(endpoint, options)
+      .catch(error => {
+        if (error.status === 401) {
           window.dispatchEvent(new Event('auth:sessionExpired'));
           throw new Error('Session expired');
         }
-        
-        if (!response.ok) {
-          return response.json()
-            .catch(() => ({}))
-            .then(errorData => {
-              throw errorData.detail ? new Error(errorData.detail) : new Error('API request failed');
-            });
-        }
-        
-        return response.status !== 204 ? response.json() : null;
+        throw error;
       });
   },
 

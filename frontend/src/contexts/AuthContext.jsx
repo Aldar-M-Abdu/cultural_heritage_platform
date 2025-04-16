@@ -30,63 +30,101 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Verifying token:', token.substring(0, 10) + '...');
       
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/current-user`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
+      // Array of endpoints to try - prioritize endpoints in this order
+      const endpoints = [
+        `${API_BASE_URL}/api/v1/auth/me`,
+        `${API_BASE_URL}/api/v1/users/me`,
+        `${API_BASE_URL}/api/v1/auth/current-user`,
+        `${API_BASE_URL}/api/v1/auth/validate-token`
+      ];
       
-      // Handle different status codes specifically
-      if (!response.ok) {
-        console.warn(`Token verification failed with status: ${response.status}`);
-        
-        // If token is invalid or expired
-        if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem('token');
-          useAuthStore.setState({ 
-            user: null, 
-            token: null, 
-            isAuthenticated: false,
-            error: 'Your session has expired. Please login again.'
+      // Try each endpoint with a short timeout
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+          
+          console.log(`Attempting to verify token at: ${endpoint}`);
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
+          
+          // Debug response
+          console.debug(`Token verification response from ${endpoint}:`, {
+            status: response.status,
+            statusText: response.statusText
+          });
+          
+          if (response.ok) {
+            try {
+              const userData = await response.json();
+              if (userData && userData.id) {
+                console.log(`Token verified successfully at ${endpoint} for user:`, userData.id);
+                useAuthStore.setState({ 
+                  user: userData,
+                  isAuthenticated: true,
+                  token: token,
+                  error: null
+                });
+                return true;
+              } else {
+                console.warn(`Response OK but invalid user data from ${endpoint}`);
+              }
+            } catch (jsonError) {
+              console.warn(`Error parsing response from ${endpoint}:`, jsonError);
+              // Continue to next endpoint
+            }
+          } else if (response.status === 422) {
+            // Special handling for 422 Unprocessable Content errors which may indicate routing issues
+            console.warn(`Received 422 from ${endpoint}, trying different endpoint`);
+            continue;
+          } else {
+            // For debugging - try to get error content
+            try {
+              const errorText = await response.text();
+              console.warn(`Error content from ${endpoint}:`, errorText);
+            } catch (e) { /* ignore */ }
+          }
+          // If response not OK, continue to next endpoint
+        } catch (error) {
+          console.warn(`Error verifying token at ${endpoint}:`, error);
+          // Continue to next endpoint
         }
-        return false;
       }
       
-      try {
-        const userData = await response.json();
-        if (!userData || !userData.id) {
-          console.error('Invalid user data received during token verification');
-          localStorage.removeItem('token');
-          return false;
-        }
-        
-        console.log('Token verified successfully for user:', userData.id);
-        useAuthStore.setState({ 
-          user: userData,
-          isAuthenticated: true,
-          token: token,
-          error: null // Clear any previous errors
-        });
-        return true;
-      } catch (jsonError) {
-        console.error('Error parsing user data during verification:', jsonError);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error verifying token:', error);
-      // Don't clear token on network errors to allow retrying
-      if (error.message !== 'Failed to fetch') {
+      // If we get here, all endpoints failed
+      console.error('All token validation endpoints failed');
+      
+      // Only clear token if we received a clear 401/403 from an endpoint
+      if (localStorage.getItem('clearToken') === 'true') {
         localStorage.removeItem('token');
+        localStorage.removeItem('clearToken');
         useAuthStore.setState({ 
           user: null, 
           token: null, 
-          isAuthenticated: false 
+          isAuthenticated: false,
+          error: 'Your session has expired. Please login again.'
         });
       }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in verifyToken function:', error);
+      
+      // Don't clear token on network errors to allow retrying
+      if (error.name === 'AbortError') {
+        console.warn('Token verification timed out, will retry later');
+        return false;
+      }
+      
       return false;
     }
   };

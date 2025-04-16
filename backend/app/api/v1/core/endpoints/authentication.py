@@ -28,35 +28,70 @@ def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Session = Depends(get_db),
 ) -> TokenSchema:
-    user = (
-        db.execute(
-            select(User).where(
-                # Check both username and email fields
-                (User.username == form_data.username) | (User.email == form_data.username)
+    try:
+        # Check if the user exists by username or email
+        user = (
+            db.execute(
+                select(User).where(
+                    # Check both username and email fields
+                    (User.username == form_data.username) | (User.email == form_data.username)
+                )
             )
+            .scalars()
+            .first()
         )
-        .scalars()
-        .first()
-    )
-    if not user or not verify_password(form_data.password, user.hashed_password):
+        
+        # Check if user exists
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        # Check if password is correct
+        if not verify_password(form_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # First revoke existing tokens
+        try:
+            db.execute(
+                delete(Token).where(
+                    Token.user_id == user.id, 
+                    Token.is_revoked == False
+                )
+            )
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Error revoking existing tokens: {str(e)}")
+            # Continue with token creation even if revocation fails
+        
+        # Create new token
+        try:
+            access_token = create_database_token(user_id=user.id, db=db)
+            return {"access_token": access_token.token, "token_type": "bearer"}
+        except Exception as e:
+            db.rollback()
+            print(f"Error creating token: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create authentication token",
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log unexpected errors but don't expose details to client
+        print(f"Login error: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication system error. Please try again later.",
         )
-    
-    # First revoke existing tokens
-    db.execute(
-        delete(Token).where(
-            Token.user_id == user.id, 
-            Token.is_revoked == False
-        )
-    )
-    db.commit()
-    
-    # Create new token
-    access_token = create_database_token(user_id=user.id, db=db)
-    return {"access_token": access_token.token, "token_type": "bearer"}
 
 
 @router.post("/login-alternate", operation_id="alternate_login")
@@ -353,23 +388,95 @@ def change_password(
     return {"detail": "Password changed successfully"}
 
 
+@router.get("/validate-token", response_model=dict, operation_id="validate_token")
+def validate_token(
+    current_token: Token = Depends(get_current_token),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Validate if the provided token is valid and return its status"""
+    try:
+        user = current_token.user
+        
+        if not user:
+            return {"valid": False, "detail": "User not found for this token"}
+        
+        if not user.is_active:
+            return {"valid": False, "detail": "User account is inactive"}
+            
+        return {
+            "valid": True, 
+            "user_id": str(user.id),
+            "username": user.username,
+            "expires_at": current_token.expires_at.isoformat() if current_token.expires_at else None
+        }
+    except Exception as e:
+        print(f"Token validation error: {str(e)}")
+        return {"valid": False, "detail": "Token validation failed"}
+
+
 @router.get("/current-user", response_model=UserOutSchema, operation_id="get_current_user_details")
 def get_current_user(
     current_token: Token = Depends(get_current_token),
     db: Session = Depends(get_db),
 ) -> UserOutSchema:
+    """Get the currently authenticated user's details"""
+    print(f"Fetching current user for token: {current_token.token[:10]}...")
+    
     user = current_token.user
     
     if not user:
+        print(f"User not found for token: {current_token.token[:10]}...")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
     
     if not user.is_active:
+        print(f"User {user.id} is inactive")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
     
+    print(f"Successfully retrieved user {user.id}")
     return user
+
+
+@router.get("/me", response_model=UserOutSchema, operation_id="get_authenticated_user")
+def get_current_user_me(
+    current_token: Token = Depends(get_current_token),
+    db: Session = Depends(get_db),
+) -> UserOutSchema:
+    """Get the currently authenticated user's details"""
+    print(f"Fetching current user for token using /me endpoint")
+    
+    try:
+        user = current_token.user
+        
+        if not user:
+            # Try to explicitly fetch the user from the database
+            user = db.execute(select(User).where(User.id == current_token.user_id)).scalars().first()
+            
+        if not user:
+            print(f"User not found for token ID: {current_token.user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        
+        if not user.is_active:
+            print(f"User {user.id} is inactive")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive",
+            )
+        
+        print(f"Successfully retrieved user {user.id} from /me endpoint")
+        return user
+    except Exception as e:
+        print(f"Error in /me endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

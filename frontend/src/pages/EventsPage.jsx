@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { API_BASE_URL } from '../config';
 
 // Fallback data to use when API fails
 const fallbackEvents = [
@@ -47,8 +48,6 @@ const EventsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const eventsPerPage = 6;
-  
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     const fetchEvents = async () => {

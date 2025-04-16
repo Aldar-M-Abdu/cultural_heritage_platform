@@ -18,6 +18,15 @@ UPLOAD_DIR = Path("static/profile_images")
 # Ensure the directory exists
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# IMPORTANT: Place /me endpoint BEFORE the /{user_id} endpoint to avoid conflicts
+@router.get("/me", response_model=UserOutSchema)
+def get_current_user(
+    current_user: User = Depends(get_current_active_user)
+) -> UserOutSchema:
+    """Get the currently authenticated user's details."""
+    # Make sure to return the user correctly formatted as UserOutSchema
+    return UserOutSchema.model_validate(current_user)
+
 @router.get("/{user_id}", response_model=UserOutSchema)
 def get_user(
     user_id: UUID, db: Session = Depends(get_db)
@@ -31,13 +40,6 @@ def get_user(
             detail="User account is inactive",
         )
     return user
-
-@router.get("/me", response_model=UserOutSchema)
-def get_current_user(
-    current_user: User = Depends(get_current_active_user)
-) -> UserOutSchema:
-    """Get the currently authenticated user's details."""
-    return current_user
 
 @router.put("/{user_id}", response_model=UserOutSchema)
 def update_user(

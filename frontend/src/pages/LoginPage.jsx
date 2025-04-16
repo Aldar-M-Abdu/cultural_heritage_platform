@@ -58,6 +58,7 @@ const LoginPage = () => {
     login({ email, password, rememberMe })
       .then(() => {
         // Success handled by the useEffect for isAuthenticated
+        console.log('Login successful or token received');
       })
       .catch(err => {
         // Error handling is done by the store and useEffect
@@ -66,6 +67,9 @@ const LoginPage = () => {
         if (loginBtn) {
           loginBtn.disabled = false;
         }
+        
+        // Display a more specific error message
+        setErrorMessage(err.message || 'Login failed. Please try again.');
       });
     // The useEffect above will handle redirection on successful login
   };

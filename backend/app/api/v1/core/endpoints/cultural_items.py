@@ -2,6 +2,8 @@ from typing import List, Optional, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
+import logging
+from datetime import datetime
 
 from app.db_setup import get_db
 from app.api.v1.core.models import CulturalItem as DbCulturalItem, User, Media as DbMedia, Tag as DbTag
@@ -32,7 +34,7 @@ from app.security import get_current_active_user, get_admin_user, get_optional_u
 import random
 
 # Router with explicit prefix - fix the duplicated prefix
-router = APIRouter(tags=["cultural_items"], prefix="/cultural-items")
+router = APIRouter(tags=["cultural_items"])
 
 @router.get("/", response_model=List[CulturalItem])
 def get_cultural_items(
@@ -48,7 +50,7 @@ def get_cultural_items(
 ) -> List[CulturalItem]:
     """Fetch cultural items with filtering, sorting and pagination."""
     try:
-        print(f"Processing request for cultural items: page={page}, limit={limit}")
+        logging.info(f"Processing request for cultural items: page={page}, limit={limit}, sort_by={sort_by}")
         skip = (page - 1) * limit
         
         # If search query is provided, use search function
@@ -57,13 +59,12 @@ def get_cultural_items(
         else:
             items = get_items_service(db, skip=skip, limit=limit)
         
-        print(f"Retrieved {len(items)} items from database")
+        logging.info(f"Retrieved {len(items)} items from database")
         
-        # If no items were found, try with a direct database query as a fallback
+        # Return empty list instead of 404 when no items are found
         if not items:
-            print("No items found with service, trying direct query")
-            items = db.query(DbCulturalItem).limit(limit).all()
-            print(f"Direct query returned {len(items)} items")
+            logging.info("No items found")
+            return []
         
         # Apply filters if needed
         if region:
@@ -76,10 +77,10 @@ def get_cultural_items(
         if sort_by == "title":
             return sorted(items, key=lambda x: x.title.lower() if x.title else "", reverse=reverse)
         else:  # default to created_at
-            return sorted(items, key=lambda x: x.created_at, reverse=reverse)
+            return sorted(items, key=lambda x: x.created_at if hasattr(x, 'created_at') else datetime.utcnow(), reverse=reverse)
     except Exception as e:
-        print(f"Error in get_cultural_items endpoint: {str(e)}")
-        # Return empty list instead of raising exception to prevent API failures
+        logging.error(f"Error in get_cultural_items endpoint: {str(e)}")
+        # Return empty list instead of raising exception
         return []
 
 @router.get("/search", response_model=List[CulturalItem], operation_id="search_cultural_items_v1")
@@ -195,11 +196,16 @@ def read_cultural_items_by_time_period(
 def read_featured_cultural_items(
     db: Session = Depends(get_db),
 ) -> List[CulturalItem]:
-    """
-    Get featured cultural items.
-    """
-    items = get_featured_cultural_items(db)
-    return items
+    """Get featured cultural items."""
+    try:
+        items = get_featured_cultural_items(db)
+        if not items:
+            logging.info("No featured items found")
+            return []
+        return items
+    except Exception as e:
+        logging.error(f"Error in read_featured_cultural_items endpoint: {str(e)}")
+        return []
 
 @router.get("/{cultural_item_id}", response_model=CulturalItemDetail, operation_id="get_cultural_item_detail_v1")
 def read_cultural_item(

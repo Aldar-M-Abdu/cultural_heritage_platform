@@ -472,3 +472,99 @@ class BlogPostResponse(BlogPostBase):
         # Set category dict explicitly during initialization
         if hasattr(self, 'category_name'):
             self.category = {"id": self.category_name, "name": self.category_name}
+
+
+### COMMUNITY SCHEMAS
+class CommunityBase(BaseModel):
+    name: str = Field(..., min_length=3, max_length=100)
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    slug: str = Field(..., min_length=3, max_length=150)
+
+
+class CommunityCreate(CommunityBase):
+    moderator_id: Optional[UUID] = None
+
+
+class CommunityUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=100)
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    moderator_id: Optional[UUID] = None
+
+
+class CommunityResponse(CommunityBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    moderator_id: Optional[UUID] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DiscussionBase(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    content: str = Field(..., min_length=10)
+    community_id: UUID
+    category: Optional[str] = "general"
+    is_pinned: Optional[bool] = False
+
+
+class DiscussionCreate(DiscussionBase):
+    pass
+
+
+class DiscussionUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=255)
+    content: Optional[str] = Field(None, min_length=10)
+    category: Optional[str] = None
+    is_pinned: Optional[bool] = None
+
+
+class DiscussionResponse(BaseModel):
+    id: UUID
+    title: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    author_id: UUID
+    community_id: UUID
+    is_pinned: bool
+    view_count: int
+    category: Optional[str] = None
+    author: Optional[UserOutSchema] = None
+    comment_count: Optional[int] = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DiscussionCommentBase(BaseModel):
+    content: str = Field(..., min_length=1)
+    discussion_id: UUID
+    parent_id: Optional[UUID] = None
+
+
+class DiscussionCommentCreate(DiscussionCommentBase):
+    pass
+
+
+class DiscussionCommentUpdate(BaseModel):
+    content: Optional[str] = Field(None, min_length=1)
+
+
+class DiscussionCommentResponse(BaseModel):
+    id: UUID
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    author_id: UUID
+    discussion_id: UUID
+    parent_id: Optional[UUID] = None
+    author: Optional[UserOutSchema] = None
+    replies: Optional[List["DiscussionCommentResponse"]] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Resolve forward reference for nested replies
+DiscussionCommentResponse.model_rebuild()

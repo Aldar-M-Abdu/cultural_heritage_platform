@@ -212,7 +212,8 @@ const ProfilePage = () => {
       body: JSON.stringify({
         current_password: passwordForm.currentPassword,
         new_password: passwordForm.newPassword
-      })
+      }),
+      credentials: 'include'
     })
     .then(response => {
       if (!response.ok) {
@@ -241,28 +242,53 @@ const ProfilePage = () => {
     setGeneralError('');
     setNotificationSuccess(false);
 
-    fetch(`${API_BASE_URL}/api/v1/users/notifications/preferences`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(notificationPreferences)
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to update notification preferences');
+    const tryEndpoints = async () => {
+      const endpoints = [
+        `${API_BASE_URL}/api/v1/users/notifications/preferences`,
+        `${API_BASE_URL}/api/v1/users/notification-preferences`,
+        `${API_BASE_URL}/api/v1/notifications/preferences`
+      ];
+      
+      let lastError = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(notificationPreferences),
+            credentials: 'include'
+          });
+          
+          if (response.ok) {
+            return true;
+          }
+          
+          const status = response.status;
+          lastError = new Error(`Failed to update preferences (${status}) at ${endpoint}`);
+        } catch (err) {
+          lastError = err;
+        }
       }
-
-      setNotificationSuccess(true);
-      setTimeout(() => setNotificationSuccess(false), 3000);
-    })
-    .catch(error => {
-      setGeneralError(error.message || 'Failed to update notification preferences');
-    })
-    .finally(() => {
-      setIsUpdating(false);
-    });
+      
+      throw lastError || new Error('Failed to update notification preferences');
+    };
+    
+    tryEndpoints()
+      .then(() => {
+        setNotificationSuccess(true);
+        setTimeout(() => setNotificationSuccess(false), 3000);
+      })
+      .catch(error => {
+        console.error('Notification preferences update error:', error);
+        setGeneralError(error.message || 'Failed to update notification preferences');
+      })
+      .finally(() => {
+        setIsUpdating(false);
+      });
   };
 
   const fetchUserItems = () => {
@@ -273,7 +299,8 @@ const ProfilePage = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       })
       .then(response => {
         if (!response.ok) {
@@ -309,7 +336,8 @@ const ProfilePage = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       })
       .then(response => {
         if (!response.ok) {

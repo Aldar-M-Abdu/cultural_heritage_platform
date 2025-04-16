@@ -4,7 +4,8 @@ from app.api.v1.core.endpoints import (
     tags,
     media,
     users,
-    events
+    events,
+    communities
 )
 
 api_router = APIRouter()
@@ -13,3 +14,4 @@ api_router.include_router(tags.router, prefix="/tags")
 api_router.include_router(media.router, prefix="/media")
 api_router.include_router(users.router, prefix="/users")
 api_router.include_router(events.router, prefix="/events")  # Include events router
+api_router.include_router(communities.router, prefix="/communities", tags=["communities"])  # Include communities router

@@ -3,37 +3,10 @@ import { Link } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import CulturalItemCard from '../components/CulturalItemCard';
 import ItemSearchBar from '../components/ItemSearchBar';
+import { API_BASE_URL } from '../config';
 
 // Sample fallback data in case API calls fail
-const fallbackItems = [
-  {
-    id: 1,
-    title: "Ancient Greek Amphora",
-    region: "Greece",
-    time_period: "Classical Period (480-323 BCE)",
-    description: "Decorated ceramic vessel used for the transport and storage of wine, olive oil and other goods.",
-    image_url: "https://images.unsplash.com/photo-1603966187872-3a0f12839769?auto=format&fit=crop&q=80",
-    tags: [{ id: 1, name: "Pottery" }, { id: 2, name: "Greek" }]
-  },
-  {
-    id: 2,
-    title: "Viking Silver Bracelet",
-    region: "Scandinavia",
-    time_period: "Viking Age (793-1066 CE)",
-    description: "Intricately twisted silver arm ring with animal head terminals, used as both adornment and currency.",
-    image_url: "https://images.unsplash.com/photo-1599643477877-530eb83abc8e?auto=format&fit=crop&q=80",
-    tags: [{ id: 3, name: "Jewelry" }, { id: 4, name: "Viking" }]
-  },
-  {
-    id: 3,
-    title: "Mayan Jade Mask",
-    region: "Mesoamerica",
-    time_period: "Late Classic Period (600-900 CE)",
-    description: "Ceremonial mask carved from jade, representing the Mayan death god.",
-    image_url: "https://images.unsplash.com/photo-1590687755451-3c8552186068?auto=format&fit=crop&q=80",
-    tags: [{ id: 5, name: "Mask" }, { id: 6, name: "Mayan" }]
-  }
-];
+
 
 const HomePage = () => {
   const [featuredItems, setFeaturedItems] = useState([]);

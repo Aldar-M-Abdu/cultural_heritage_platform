@@ -9,17 +9,17 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles  # Add this import
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from app.api.v1.routers import router
+from app.api.v1.api import api_router  # Updated to use api_router from api.py
 from app.settings import settings
 from app.db_setup import init_db, is_db_connected
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Validate DATABASE_URL
+# Validate DB_URL
 if not os.getenv("DB_URL"):
-    logging.error("DATABASE_URL environment variable is not set. Please check your .env file.")
-    raise ValueError("DATABASE_URL environment variable is required but not set.")
+    logging.error("DB_URL environment variable is not set. Please check your .env file.")
+    raise ValueError("DB_URL environment variable is required but not set.")
 
 # Configure logging
 logging.basicConfig(
@@ -40,18 +40,33 @@ def log_startup_config(app: FastAPI):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: initialize the database
-    try:
-        # Check DB connection before initializing
-        if not is_db_connected():
-            logging.warning("Database connection failed - will retry on first request")
-        else:
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            # Check DB connection before initializing
+            if not is_db_connected():
+                retry_count += 1
+                logging.warning(f"Database connection failed, attempt {retry_count} of {max_retries}")
+                if retry_count == max_retries:
+                    logging.error("Failed to connect to database after maximum retries")
+                    break
+                await asyncio.sleep(2)  # Wait before retrying
+                continue
+            
             init_db()
             logging.info("Database initialized successfully")
-        
-        log_startup_config(app)
-    except Exception as e:
-        logging.error(f"Failed to initialize database: {str(e)}")
-        # Don't re-raise the exception - this allows the app to start even with DB issues
+            break
+        except Exception as e:
+            retry_count += 1
+            logging.error(f"Failed to initialize database (attempt {retry_count}): {str(e)}")
+            if retry_count == max_retries:
+                logging.error("Failed to initialize database after maximum retries")
+                break
+            await asyncio.sleep(2)  # Wait before retrying
+    
+    log_startup_config(app)
     
     try:
         # Yield control to the application
@@ -91,11 +106,14 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# Modified middleware: Skip API routes and documentation routes to prevent redirect loops
+# Modified middleware: Skip API routes, documentation routes, and static files to prevent redirect loops
 @app.middleware("http")
 async def redirect_trailing_slash(request, call_next):
-    # Skip API routes and documentation routes to prevent redirect loops
-    if request.url.path.startswith("/api/") or request.url.path in ["/docs", "/redoc", "/openapi.json"]:
+    # Skip API routes, documentation routes, and static files to prevent redirect loops
+    if (request.url.path.startswith("/api/") or 
+        request.url.path in ["/docs", "/redoc", "/openapi.json"] or
+        request.url.path == "/favicon.ico" or
+        "." in request.url.path.split("/")[-1]):  # Skip files with extensions
         return await call_next(request)
     
     if not request.url.path.endswith("/") and request.url.path != "/":
@@ -112,18 +130,18 @@ if not os.path.exists(static_dir):
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Include API router with all endpoints
-app.include_router(router, prefix="/api/v1")
+app.include_router(api_router, prefix="/api/v1")  # Updated to use api_router
 
 # Fix CORS middleware to allow multiple frontend URLs
 frontend_urls = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
     "http://localhost:3000",  # Backup URL for development
-    "*"  # Allow all origins in development - REMOVE IN PRODUCTION
+    "http://localhost:5174"   # Another possible dev URL
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_urls,
+    allow_origins=frontend_urls,  # Removed wildcard "*", using specific origins instead
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -136,10 +154,14 @@ async def handle_options(request, call_next):
     if request.method == "OPTIONS":
         # Handle preflight request
         from fastapi.responses import Response
+        origin = request.headers.get("Origin", "")
+        # Only allow listed origins when credentials are used
+        allowed_origin = origin if origin in frontend_urls else frontend_urls[0]
+        
         return Response(
             status_code=200,
             headers={
-                "Access-Control-Allow-Origin": request.headers.get("Origin", "*"),
+                "Access-Control-Allow-Origin": allowed_origin,
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type, Authorization",
                 "Access-Control-Allow-Credentials": "true",

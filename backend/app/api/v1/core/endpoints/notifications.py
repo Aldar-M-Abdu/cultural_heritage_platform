@@ -9,14 +9,13 @@ from app.api.v1.core.models import Notification, User
 from app.api.v1.core.schemas import NotificationResponse, NotificationUpdate
 from app.security import get_current_active_user
 
-# Use the prefix parameter when defining the router
+# Use a simple router without prefix - the prefix is added by the parent router
 router = APIRouter(
-    prefix="/api/v1/notifications", 
     tags=["notifications"]
 )
 
 # Update the path to be relative to the prefix
-@router.get("", response_model=List[NotificationResponse])
+@router.get("/", response_model=List[NotificationResponse])
 def get_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -35,7 +34,7 @@ def get_notifications(
     notifications = db.execute(query).scalars().all()
     return notifications
 
-# Update the path to be relative to the prefix
+# Keep using relative paths
 @router.get("/unread-count", response_model=dict)
 def get_unread_count(
     db: Session = Depends(get_db),

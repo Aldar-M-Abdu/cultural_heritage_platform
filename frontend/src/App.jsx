@@ -27,6 +27,8 @@ import PressPage from './pages/PressPage';
 import TermsOfService from './pages/TermsOfService';
 import ExamplePage from './pages/ExamplePage';
 import CommunityPage from './pages/CommunityPage';
+import NewDiscussionPage from './pages/NewDiscussionPage';
+import DiscussionDetailPage from './pages/DiscussionDetailPage';
 import ContributorsPage from './pages/ContributorsPage';
 import ExhibitionsPage from './pages/ExhibitionsPage';
 import FAQPage from './pages/FAQPage';
@@ -52,16 +54,52 @@ function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        const token = localStorage.getItem('token');
+        // Set token in state if it exists in localStorage but not in state
+        if (token && !useAuthStore.getState().token) {
+          useAuthStore.setState({ token });
+        }
+        
         if (token) {
-          await fetchUser().catch(error => {
+          // Only log in development mode
+          if (import.meta.env.DEV) {
+            console.log("Initializing with token:", token.substring(0, 10) + '...');
+          }
+          
+          try {
+            await fetchUser();
+            // Only log in development mode
+            if (import.meta.env.DEV) {
+              console.log('User data fetched successfully during initialization');
+            }
+          } catch (error) {
             console.error('Failed to fetch user data:', error);
-            // If fetching user data fails, try checking auth as a fallback
-            checkAuth().catch(err => {
-              console.error('Auth check also failed:', err);
-            });
-          });
+            // Don't automatically log out if it might be a network error
+            if (error.message.includes('failed to fetch') || 
+                error.message.includes('network') ||
+                error.message.includes('timeout')) {
+              console.warn('Network error during initialization, keeping token');
+            } else {
+              // If it's an auth error, try checking auth as a fallback
+              try {
+                const isValid = await checkAuth();
+                if (!isValid) {
+                  console.warn('Token validation failed, logging out');
+                  localStorage.removeItem('token');
+                  useAuthStore.getState().logout();
+                }
+              } catch (authError) {
+                console.error('Auth check also failed:', authError);
+              }
+            }
+          }
         } else {
-          await checkAuth();
+          // No token found, verify we're logged out
+          useAuthStore.setState({ 
+            isAuthenticated: false,
+            user: null,
+            token: null
+          });
         }
       } catch (error) {
         console.error('Authentication initialization failed:', error);
@@ -118,6 +156,8 @@ function App() {
             
             {/* New routes for the additional pages */}
             <Route path="/community" element={<CommunityPage />} />
+            <Route path="/community/new-discussion" element={<NewDiscussionPage />} />
+            <Route path="/community/discussions/:discussionId" element={<DiscussionDetailPage />} />
             <Route path="/contributors" element={<ContributorsPage />} />
             <Route path="/exhibitions" element={<ExhibitionsPage />} />
             <Route path="/faq" element={<FAQPage />} />

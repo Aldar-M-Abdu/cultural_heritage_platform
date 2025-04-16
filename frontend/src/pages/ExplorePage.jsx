@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CulturalItemCard from '../components/CulturalItemCard';
+import { API_BASE_URL } from '../config';
 
 // Use fallback images in case the originals don't load
 const fallbackImage = "https://images.unsplash.com/photo-1608412759225-8cb7f42eb7fb?auto=format&fit=crop&q=80";
@@ -42,7 +43,6 @@ const ExplorePage = () => {
   useEffect(() => {
     const fetchExploreItems = () => {
       try {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
         fetch(`${API_BASE_URL}/api/v1/cultural-items/featured`)
           .then(response => {
             if (!response.ok) {

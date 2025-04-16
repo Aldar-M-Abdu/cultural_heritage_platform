@@ -2,7 +2,11 @@ from fastapi import APIRouter
 from app.api.v1.core.endpoints import (
     cultural_items,
     comments,
-    blog_posts  # Keep this import
+    blog_posts,  # Keep this import
+    communities,  # Add communities
+    events,      # Add events
+    discussions, # Add discussions
+    notifications # Add notifications
 )
 
 # Import user_favorites and authentication directly to avoid circular imports
@@ -19,3 +23,7 @@ router.include_router(comments.router, prefix="/comments")
 router.include_router(blog_posts.router, prefix="/blog")  # Keep blog router
 router.include_router(authentication.router, prefix="/auth")  # Add authentication router
 router.include_router(users.router)  # Add users router without prefix (already has /users prefix)
+router.include_router(communities.router, prefix="/communities")  # Add communities router
+router.include_router(events.router, prefix="/events")  # Add events router
+router.include_router(discussions.router, prefix="/discussions")  # Add discussions router
+router.include_router(notifications.router, prefix="/notifications")  # Add notifications router

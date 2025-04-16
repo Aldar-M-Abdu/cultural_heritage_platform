@@ -2,14 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import useAuthStore from '../stores/authStore';
+import useCommunityStore from '../stores/communityStore';
 
 const CommunityPage = () => {
-  const [discussions, setDiscussions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { isAuthenticated } = useAuthStore();
+  
+  const { 
+    communities,
+    discussions, 
+    isLoading, 
+    error, 
+    fetchCommunities, 
+    fetchDiscussions 
+  } = useCommunityStore();
 
   const categories = [
     { id: 'all', name: 'All Discussions' },
@@ -22,112 +29,19 @@ const CommunityPage = () => {
 
   // Fetch discussions data
   useEffect(() => {
-    const fetchDiscussions = () => {
-      setIsLoading(true);
-      
-      // Using the comments endpoint as a source of discussion data
-      fetch('/api/v1/comments')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Error: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(commentsData => {
-          // Get related cultural item data for each comment
-          return Promise.all(
-            commentsData.map(comment => {
-              // Get cultural item details
-              return fetch(`/api/v1/cultural-items/${comment.cultural_item_id}`)
-                .then(itemResponse => itemResponse.json())
-                .then(itemData => {
-                  // Get user data if available
-                  let userData = { name: "Anonymous User", avatar: "https://randomuser.me/api/portraits/lego/1.jpg", role: "Community Member" };
-                  if (comment.user_id) {
-                    return fetch(`/api/v1/users/${comment.user_id}`)
-                      .then(userResponse => {
-                        if (userResponse.ok) {
-                          return userResponse.json();
-                        }
-                        return userData;
-                      })
-                      .then(userDataResponse => {
-                        userData = {
-                          id: userDataResponse.id,
-                          name: userDataResponse.full_name || userDataResponse.username,
-                          avatar: userDataResponse.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDataResponse.username)}`,
-                          role: userDataResponse.is_admin ? "Administrator" : "Community Member"
-                        };
-                        
-                        // Map to the format expected by the component
-                        return {
-                          id: comment.id,
-                          title: itemData.title,
-                          author: userData,
-                          category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
-                          content: comment.text,
-                          createdAt: comment.created_at,
-                          commentCount: Math.floor(Math.random() * 30), // Placeholder for now
-                          viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
-                          isPinned: false,
-                          lastActivity: comment.created_at
-                        };
-                      })
-                      .catch(err => {
-                        console.error("Error fetching user data:", err);
-                        // Map to the format expected by the component with default user data
-                        return {
-                          id: comment.id,
-                          title: itemData.title,
-                          author: userData,
-                          category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
-                          content: comment.text,
-                          createdAt: comment.created_at,
-                          commentCount: Math.floor(Math.random() * 30), // Placeholder for now
-                          viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
-                          isPinned: false,
-                          lastActivity: comment.created_at
-                        };
-                      });
-                  } else {
-                    // Map to the format expected by the component with default user data
-                    return {
-                      id: comment.id,
-                      title: itemData.title,
-                      author: userData,
-                      category: itemData.tags.length > 0 ? itemData.tags[0].name.toLowerCase() : "general",
-                      content: comment.text,
-                      createdAt: comment.created_at,
-                      commentCount: Math.floor(Math.random() * 30), // Placeholder for now
-                      viewCount: Math.floor(Math.random() * 200) + 50, // Placeholder for now
-                      isPinned: false,
-                      lastActivity: comment.created_at
-                    };
-                  }
-                })
-                .catch(err => {
-                  console.error(`Error fetching data for comment ${comment.id}:`, err);
-                  return null;
-                });
-            })
-          );
-        })
-        .then(discussionsData => {
-          // Filter out any failed requests
-          const validDiscussions = discussionsData.filter(discussion => discussion !== null);
-          setDiscussions(validDiscussions);
-        })
-        .catch(err => {
-          console.error('Error fetching discussions:', err);
-          setError('Failed to load discussions. Please try again later.');
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    };
+    // First fetch available communities
+    fetchCommunities();
     
-    fetchDiscussions();
-  }, []);
+    // Then fetch discussions from the "general" community as default
+    // We would have a default community slug or ID here
+    if (communities.length > 0) {
+      const generalCommunity = communities.find(c => c.slug === 'general-discussion') || communities[0];
+      fetchDiscussions(generalCommunity.id, {
+        category: activeCategory !== 'all' ? activeCategory : null,
+        search: searchQuery || null
+      });
+    }
+  }, [activeCategory, searchQuery]);
   
   // Format date to relative time
   const formatRelativeTime = (dateString) => {
@@ -153,11 +67,11 @@ const CommunityPage = () => {
     )
     .sort((a, b) => {
       // Sort pinned first
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
       
-      // Then sort by last activity
-      return new Date(b.lastActivity) - new Date(a.lastActivity);
+      // Then sort by last activity (updated_at)
+      return new Date(b.updated_at) - new Date(a.updated_at);
     });
 
   return (
@@ -265,7 +179,7 @@ const CommunityPage = () => {
                         <div className="px-4 py-4 sm:px-6">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              {discussion.isPinned && (
+                              {discussion.is_pinned && (
                                 <span className="flex-shrink-0">
                                   <svg className="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -287,14 +201,15 @@ const CommunityPage = () => {
                               <p className="flex items-center text-sm text-gray-500">
                                 <img
                                   className="h-6 w-6 rounded-full mr-2"
-                                  src={discussion.author.avatar}
-                                  alt={discussion.author.name}
+                                  src={discussion.author?.profile_image || `https://ui-avatars.com/api/?name=${encodeURIComponent(discussion.author?.username || 'User')}&background=6366f1&color=fff`}
+                                  alt={discussion.author?.username || 'User'}
                                   onError={(e) => {
                                     e.target.onerror = null;
-                                    e.target.src = "https://ui-avatars.com/api/?name=" + encodeURIComponent(discussion.author.name);
+                                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(discussion.author?.username || 'User')}`;
                                   }}
                                 />
-                                {discussion.author.name} • {discussion.author.role}
+                                {discussion.author?.full_name || discussion.author?.username || 'Anonymous'} • 
+                                {discussion.author?.is_admin ? " Administrator" : " Community Member"}
                               </p>
                             </div>
                             <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
@@ -302,20 +217,20 @@ const CommunityPage = () => {
                                 <svg className="h-4 w-4 text-gray-400 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
-                                {discussion.commentCount} replies
+                                {discussion.comment_count} replies
                               </span>
                               <span className="mr-4">
                                 <svg className="h-4 w-4 text-gray-400 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
-                                {discussion.viewCount} views
+                                {discussion.view_count} views
                               </span>
                               <span>
                                 <svg className="h-4 w-4 text-gray-400 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                {formatRelativeTime(discussion.lastActivity)}
+                                {formatRelativeTime(discussion.updated_at)}
                               </span>
                             </div>
                           </div>
@@ -352,19 +267,32 @@ const CommunityPage = () => {
               <div className="grid grid-cols-2 md:grid-cols-4">
                 <div className="px-6 py-5 text-center border-r border-gray-200">
                   <dt className="text-sm font-medium text-gray-500 truncate">Total Discussions</dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">245</dd>
+                  <dd className="mt-1 text-3xl font-semibold text-gray-900">{discussions.length}</dd>
                 </div>
                 <div className="px-6 py-5 text-center border-r border-gray-200">
                   <dt className="text-sm font-medium text-gray-500 truncate">Active Members</dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">1,253</dd>
+                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                    {/* Count distinct authors */}
+                    {new Set(discussions.map(d => d.author?.id)).size}
+                  </dd>
                 </div>
                 <div className="px-6 py-5 text-center border-r border-gray-200">
                   <dt className="text-sm font-medium text-gray-500 truncate">Total Comments</dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">8,742</dd>
+                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                    {/* Sum comment counts */}
+                    {discussions.reduce((sum, discussion) => sum + (discussion.comment_count || 0), 0)}
+                  </dd>
                 </div>
                 <div className="px-6 py-5 text-center">
                   <dt className="text-sm font-medium text-gray-500 truncate">New This Month</dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">142</dd>
+                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                    {/* Count discussions from this month */}
+                    {discussions.filter(d => {
+                      const date = new Date(d.created_at);
+                      const now = new Date();
+                      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                    }).length}
+                  </dd>
                 </div>
               </div>
             </div>
