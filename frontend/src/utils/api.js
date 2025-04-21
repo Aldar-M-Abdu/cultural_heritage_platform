@@ -22,7 +22,6 @@ export const tryMultipleEndpoints = async (endpointFormats, params = {}, options
   for (const format of endpointFormats) {
     try {
       const endpoint = `${format}${queryPart}`;
-      console.log(`Trying endpoint: ${endpoint}`);
       
       // Add timeout to prevent hanging requests
       const signal = options.signal || AbortSignal.timeout(10000);
@@ -30,7 +29,6 @@ export const tryMultipleEndpoints = async (endpointFormats, params = {}, options
       
       return response;
     } catch (error) {
-      console.warn(`Endpoint ${format} failed:`, error);
       lastError = error;
       // Continue to next endpoint format
     }

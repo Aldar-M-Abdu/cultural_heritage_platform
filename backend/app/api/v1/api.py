@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.core.endpoints import (
     cultural_items, user_favorites, events, communities, discussions, blog_posts,
-    comments, users, authentication, notifications
+    comments, users, authentication, notifications, contributions
 )
 from fastapi.responses import RedirectResponse
 
@@ -18,6 +18,7 @@ api_router.include_router(blog_posts.router, prefix="/blog", tags=["blog"])  # U
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(communities.router, prefix="/communities", tags=["communities"])
 api_router.include_router(discussions.router, prefix="/discussions", tags=["discussions"])
+api_router.include_router(contributions.router, tags=["contributions"])
 
 # Add redirects for common mismatched routes
 @api_router.get("/blog-posts{path:path}", include_in_schema=False)

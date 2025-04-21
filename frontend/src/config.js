@@ -60,11 +60,6 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
       config.signal = controller.signal;
     }
     
-    // Only log in development mode
-    if (import.meta.env.DEV) {
-      console.log(`Fetching: ${fullUrl}`);
-    }
-    
     const response = await fetch(fullUrl, config);
     
     if (timeoutId) {

@@ -25,7 +25,6 @@ const ExhibitionsPage = () => {
       
       // Improved API call with more detailed error handling
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-      console.log('Fetching exhibitions from:', `${API_BASE_URL}/api/v1/cultural-items`);
       
       // First try cultural-items endpoint which maps to exhibitions
       fetch(`${API_BASE_URL}/api/v1/cultural-items`)
@@ -33,7 +32,6 @@ const ExhibitionsPage = () => {
           if (response.ok) {
             return response.json();
           } else {
-            console.log('First endpoint failed, trying alternative...');
             // Try an alternative endpoint if the first fails
             return fetch(`${API_BASE_URL}/exhibitions`)
               .then(altResponse => {
@@ -41,7 +39,6 @@ const ExhibitionsPage = () => {
                   return altResponse.json();
                 }
                 // If that fails too, try another common endpoint
-                console.log('Second endpoint failed, trying final alternative...');
                 return fetch(`${API_BASE_URL}/api/v1/exhibitions`)
                   .then(finalResponse => {
                     if (finalResponse.ok) {
@@ -51,13 +48,11 @@ const ExhibitionsPage = () => {
                   });
               })
               .catch(altErr => {
-                console.error('Alternative endpoint error:', altErr);
                 throw new Error('Failed to fetch exhibitions from all attempted endpoints');
               });
           }
         })
         .then(data => {
-          console.log('Exhibition data received:', data);
           // Transform and process the data to match the exhibition format
           const processedData = Array.isArray(data) ? data.map(item => ({
             id: item.id,
@@ -82,7 +77,6 @@ const ExhibitionsPage = () => {
           }
         })
         .catch(err => {
-          console.error('Error fetching exhibitions:', err);
           setError('Failed to load exhibitions. Please try again later.');
           
           // Set empty arrays to avoid errors in UI rendering

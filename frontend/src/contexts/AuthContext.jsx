@@ -28,8 +28,6 @@ export const AuthProvider = ({ children }) => {
     if (!token) return false;
     
     try {
-      console.log('Verifying token:', token.substring(0, 10) + '...');
-      
       // Array of endpoints to try - prioritize endpoints in this order
       const endpoints = [
         `${API_BASE_URL}/api/v1/auth/me`,
@@ -44,7 +42,6 @@ export const AuthProvider = ({ children }) => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
           
-          console.log(`Attempting to verify token at: ${endpoint}`);
           const response = await fetch(endpoint, {
             method: 'GET',
             headers: {
@@ -57,17 +54,10 @@ export const AuthProvider = ({ children }) => {
           
           clearTimeout(timeoutId);
           
-          // Debug response
-          console.debug(`Token verification response from ${endpoint}:`, {
-            status: response.status,
-            statusText: response.statusText
-          });
-          
           if (response.ok) {
             try {
               const userData = await response.json();
               if (userData && userData.id) {
-                console.log(`Token verified successfully at ${endpoint} for user:`, userData.id);
                 useAuthStore.setState({ 
                   user: userData,
                   isAuthenticated: true,

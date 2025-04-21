@@ -76,6 +76,38 @@ const ItemDetailPage = () => {
     fetchItemData();
   }, [id, user, isAuthenticated]);
 
+  // Check if item is in favorites when component mounts or authentication state changes
+  useEffect(() => {
+    const checkIsFavorite = async () => {
+      if (!isAuthenticated || !id) return;
+      
+      try {
+        setIsFavoriteLoading(true);
+        const response = await fetch(`${API_BASE_URL}/api/v1/favorites/check/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to check favorite status');
+        }
+        
+        const data = await response.json();
+        setIsFavorite(data.is_favorite);
+      } catch (err) {
+        console.error('Error checking favorite status:', err);
+        // Don't show an alert, just log the error
+      } finally {
+        setIsFavoriteLoading(false);
+      }
+    };
+    
+    checkIsFavorite();
+  }, [id, isAuthenticated]);
+
   const handleDeleteItem = async () => {
     if (!window.confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
       return;
@@ -106,7 +138,7 @@ const ItemDetailPage = () => {
   const handleToggleFavorite = async () => {
     try {
       if (isFavorite) {
-        await fetch(`${API_BASE_URL}/api/v1/user-favorites/${id}`, {
+        await fetch(`${API_BASE_URL}/api/v1/favorites/${id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -116,7 +148,7 @@ const ItemDetailPage = () => {
         });
       } else {
         // Add to favorites
-        await fetch(`${API_BASE_URL}/api/v1/user-favorites/`, {
+        await fetch(`${API_BASE_URL}/api/v1/favorites/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

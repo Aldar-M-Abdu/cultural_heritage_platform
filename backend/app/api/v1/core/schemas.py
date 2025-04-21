@@ -76,6 +76,9 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    profile_image: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -568,3 +571,22 @@ class DiscussionCommentResponse(BaseModel):
 
 # Resolve forward reference for nested replies
 DiscussionCommentResponse.model_rebuild()
+
+
+### CONTRIBUTION SCHEMAS
+class ContributionBase(BaseModel):
+    contribution_type: str
+    cultural_item_id: UUID
+    timestamp: Optional[datetime] = None
+
+class ContributionCreate(ContributionBase):
+    pass
+
+class ContributionResponse(ContributionBase):
+    id: UUID
+    user_id: UUID
+    timestamp: datetime
+    user: Optional[UserOutSchema] = None
+    cultural_item: Optional[CulturalItemBase] = None
+
+    model_config = ConfigDict(from_attributes=True)

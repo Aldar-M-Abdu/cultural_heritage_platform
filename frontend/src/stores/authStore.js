@@ -419,6 +419,61 @@ const useAuthStore = create(
         }
       },
 
+      updateProfile: async (profileData) => {
+        const { token } = get();
+        if (!token) {
+          throw new Error('You must be logged in to update your profile');
+        }
+        
+        set({ isLoading: true, error: null });
+        
+        // Try multiple possible API endpoints
+        const endpoints = [
+          `${API_BASE_URL}/api/v1/users/me`,
+          `${API_BASE_URL}/api/v1/auth/update-profile`,
+          `${API_BASE_URL}/users/me`
+        ];
+        
+        let userData = null;
+        let responseError = null;
+        
+        for (const endpoint of endpoints) {
+          try {
+            const response = await fetch(endpoint, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(profileData),
+              credentials: 'include'
+            });
+            
+            if (response.ok) {
+              userData = await response.json();
+              break;
+            } else {
+              const errorData = await response.json().catch(() => ({}));
+              responseError = errorData.detail || `Failed to update profile (${response.status})`;
+            }
+          } catch (err) {
+            responseError = err.message;
+            console.error(`Error updating profile at ${endpoint}:`, err);
+            // Continue to the next endpoint
+          }
+        }
+        
+        if (userData) {
+          set({ 
+            user: userData,
+            error: null 
+          });
+          return userData;
+        } else {
+          throw new Error(responseError || 'Failed to update profile using any endpoint');
+        }
+      },
+
       checkAuth: async () => {
         // Check if token exists in state or localStorage
         const token = get().token || localStorage.getItem('token');

@@ -20,6 +20,7 @@ const Navigation = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef(null);
+  const userMenuRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -86,6 +87,9 @@ const Navigation = () => {
     function handleClickOutside(event) {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setNotificationsOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
       }
     }
 
@@ -276,7 +280,7 @@ const Navigation = () => {
                     </div>
                   )}
                 </div>
-                <div className="relative">
+                <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className="flex items-center space-x-2 p-2 rounded-lg hover:bg-indigo-50 transition-colors"
@@ -304,10 +308,9 @@ const Navigation = () => {
                     </svg>
                   </button>
                   {userMenuOpen && (
-                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none animate-fadeIn">
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none animate-fadeIn z-50">
                       <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="user-menu">
                         <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Your Profile</Link>
-                        <Link to="/user/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Settings</Link>
                         <Link to="/user/favorites" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Saved Items</Link>
                         <Link to="/items/new" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Add New Item</Link>
                         <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Sign out</button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { API_BASE_URL } from '../config';
 
@@ -48,6 +48,7 @@ const EventsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const eventsPerPage = 6;
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -86,7 +87,6 @@ const EventsPage = () => {
         }
         
         const data = await response.json();
-        console.log('Event data received:', data);
         
         // Process the response data based on its structure
         let processedEvents = [];
@@ -265,125 +265,93 @@ const EventsPage = () => {
         
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <LoadingSpinner size="lg" />
+            <LoadingSpinner size="lg" color="indigo" />
           </div>
-        ) : events.length > 0 ? (
-          <>
-            {/* Events grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {events.map((event) => (
-                <article 
-                  key={event.id} 
-                  className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300"
-                >
-                  <Link to={`/events/${event.id}`}>
-                    <div className="relative h-48 bg-gray-200">
-                      {event.image_url ? (
-                        <img
-                          src={event.image_url}
-                          alt={event.title}
-                          className="w-full h-full object-cover"
-                          onError={handleImageError}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-indigo-100">
-                          <svg className="h-16 w-16 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                      
-                      {/* Event badges */}
-                      <div className="absolute top-4 left-4 flex flex-col space-y-2">
-                        {isToday(event.start_date) && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Today
-                          </span>
-                        )}
-                        {event.is_free && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Free
-                          </span>
-                        )}
-                        {event.event_type && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                            {event.event_type}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="p-6">
-                      <div className="text-sm text-indigo-600 mb-2">
-                        {formatEventDate(event.start_date)}
-                      </div>
-                      <h2 className="text-xl font-bold text-gray-900 mb-2">
-                        {event.title}
-                      </h2>
-                      <p className="text-gray-600 mb-4 line-clamp-3">
-                        {event.description}
-                      </p>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span>{event.location || 'Online Event'}</span>
-                      </div>
-                    </div>
-                  </Link>
-                </article>
-              ))}
-            </div>
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex justify-center mt-12">
-                <nav className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  {[...Array(totalPages).keys()].map(page => (
-                    <button
-                      key={page + 1}
-                      onClick={() => handlePageChange(page + 1)}
-                      className={`px-3 py-1 rounded ${
-                        currentPage === page + 1
-                          ? 'bg-indigo-100 text-indigo-800 font-medium'
-                          : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      {page + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </nav>
+        ) : error ? (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
               </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-16 bg-white rounded-lg shadow">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No events found</h3>
-            <p className="mt-1 text-gray-500">
-              {activeFilter === 'upcoming'
-                ? "There are no upcoming events scheduled at this time. Please check back later."
-                : activeFilter === 'past'
-                ? "There are no past events in our records."
-                : "No events found matching your criteria."}
-            </p>
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No events found</h3>
+            <p className="text-gray-500">We couldn't find any {activeFilter} events.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {events.map(event => (
+              <div 
+                key={event.id} 
+                className="bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:transform hover:scale-105 hover:shadow-lg cursor-pointer"
+                onClick={() => navigate(`/events/${event.id}`)}
+              >
+                {/* Event image */}
+                <div className="relative h-48 bg-indigo-100 overflow-hidden">
+                  {isToday(event.start_date) && (
+                    <div className="absolute top-0 right-0 bg-green-500 text-white px-3 py-1 font-medium text-sm z-10">
+                      Today
+                    </div>
+                  )}
+                  <img 
+                    src={event.image_url || "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&q=80"} 
+                    alt={event.title}
+                    className="w-full h-full object-cover"
+                    onError={handleImageError}
+                  />
+                </div>
+                
+                {/* Event details */}
+                <div className="p-6">
+                  <div className="flex items-center mb-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${event.is_free ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                      {event.is_free ? 'Free Entry' : 'Paid Event'}
+                    </span>
+                    {event.event_type && (
+                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                        {event.event_type}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">{event.title}</h3>
+                  <p className="text-sm text-gray-500 mb-4">{formatEventDate(event.start_date)}</p>
+                  
+                  {event.location && (
+                    <div className="flex items-center text-gray-600 text-sm mb-4">
+                      <svg className="h-4 w-4 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="truncate">{event.location}</span>
+                    </div>
+                  )}
+                  
+                  <div className="line-clamp-3 text-sm text-gray-600 mb-4">
+                    {event.description || 'No description available for this event.'}
+                  </div>
+                  
+                  <button
+                    className="w-full px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/events/${event.id}`);
+                    }}
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

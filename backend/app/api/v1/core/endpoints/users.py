@@ -1,11 +1,11 @@
-from typing import Annotated, Optional
+from typing import Annotated, Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.db_setup import get_db
-from app.api.v1.core.models import User
-from app.api.v1.core.schemas import UserUpdate, UserOutSchema
+from app.api.v1.core.models import User, Contribution
+from app.api.v1.core.schemas import UserUpdate, UserOutSchema, ContributionResponse
 from app.security import get_current_active_user
 import shutil
 import os
@@ -26,6 +26,25 @@ def get_current_user(
     """Get the currently authenticated user's details."""
     # Make sure to return the user correctly formatted as UserOutSchema
     return UserOutSchema.model_validate(current_user)
+
+@router.put("/me", response_model=UserOutSchema)
+def update_current_user(
+    user: UserUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+) -> UserOutSchema:
+    """Update the current user's profile"""
+    db_user = db.execute(select(User).where(User.id == current_user.id)).scalars().first()
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    for key, value in user.model_dump(exclude_unset=True).items():
+        setattr(db_user, key, value)
+    
+    db.commit()
+    db.refresh(db_user)
+    # Make sure to return properly formatted user data
+    return UserOutSchema.model_validate(db_user)
 
 @router.get("/{user_id}", response_model=UserOutSchema)
 def get_user(
@@ -62,7 +81,7 @@ def update_user(
         setattr(db_user, key, value)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    return UserOutSchema.model_validate(db_user)
 
 @router.post("/{user_id}/profile-image", response_model=UserOutSchema)
 async def upload_profile_image(
@@ -109,3 +128,22 @@ async def upload_profile_image(
     db.refresh(db_user)
     
     return db_user
+
+# This endpoint has been moved to contributions.py
+# @router.get("/me/contributions", response_model=List[ContributionResponse])
+# def get_user_contributions(
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_active_user)
+# ):
+#     """Get all contributions made by the currently authenticated user."""
+#     contributions = db.query(Contribution)\
+#         .options(joinedload(Contribution.cultural_item))\
+#         .filter(Contribution.user_id == current_user.id)\
+#         .order_by(Contribution.timestamp.desc())\
+#         .all()
+#     
+#     # Add the user object to each contribution
+#     for contribution in contributions:
+#         contribution.user = current_user
+#     
+#     return contributions

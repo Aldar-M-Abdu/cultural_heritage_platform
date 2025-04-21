@@ -58,7 +58,6 @@ const LoginPage = () => {
     login({ email, password, rememberMe })
       .then(() => {
         // Success handled by the useEffect for isAuthenticated
-        console.log('Login successful or token received');
       })
       .catch(err => {
         // Error handling is done by the store and useEffect

@@ -157,31 +157,23 @@ const ProfilePage = () => {
       return;
     }
 
-    fetch(`${API_BASE_URL}/api/v1/users/me`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(profileForm)
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
-      setProfileSuccess(true);
-      setTimeout(() => setProfileSuccess(false), 3000);
+    // Use the authStore's updateProfile method with multiple endpoint fallbacks
+    useAuthStore.getState().updateProfile(profileForm)
+      .then(() => {
+        setProfileSuccess(true);
+        setTimeout(() => setProfileSuccess(false), 3000);
 
-      if (profileImage) {
-        return handleImageUpload();
-      }
-    })
-    .catch(error => {
-      setGeneralError(error.message || 'Failed to update profile');
-    })
-    .finally(() => {
-      setIsUpdating(false);
-    });
+        if (profileImage) {
+          return handleImageUpload();
+        }
+      })
+      .catch(error => {
+        console.error('Profile update error:', error);
+        setGeneralError(error.message || 'Failed to update profile');
+      })
+      .finally(() => {
+        setIsUpdating(false);
+      });
   };
 
   const handlePasswordSubmit = (e) => {
@@ -332,7 +324,7 @@ const ProfilePage = () => {
         throw new Error("Authentication token not available");
       }
       
-      fetch(`${API_BASE_URL}/api/v1/user-contributions`, {
+      fetch(`${API_BASE_URL}/api/v1/users/me/contributions`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -347,6 +339,17 @@ const ProfilePage = () => {
       })
       .then(data => {
         setUserContributions(data);
+        
+        // Calculate contribution stats
+        if (Array.isArray(data)) {
+          const stats = {
+            total: data.length,
+            add: data.filter(c => c.contribution_type === 'add').length,
+            edit: data.filter(c => c.contribution_type === 'edit').length,
+            delete: data.filter(c => c.contribution_type === 'delete').length
+          };
+          setContributionStats(stats);
+        }
       })
       .catch(error => {
         console.error('Error fetching user contributions:', error);

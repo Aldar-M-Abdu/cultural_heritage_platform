@@ -156,8 +156,6 @@ const CreateItemPage = () => {
         tags: formData.category ? [{ name: formData.category }] : []
       };
       
-      console.log('Creating cultural item with data:', itemData);
-      
       return fetch(`${baseURL}/api/v1/cultural-items`, {
         method: 'POST',
         headers: {
@@ -169,7 +167,6 @@ const CreateItemPage = () => {
       .then(response => {
         if (!response.ok) {
           return response.text().then(errorText => {
-            console.error('Item creation failed:', errorText);
             let errorMessage = 'Failed to create item';
             
             try {
@@ -207,7 +204,6 @@ const CreateItemPage = () => {
           },
           body: mediaFormData
         }).catch(err => {
-          console.error(`Failed to upload media file ${fileObj.file.name}:`, err);
           return null;
         });
         
@@ -221,7 +217,6 @@ const CreateItemPage = () => {
       let imageUploadPromise;
       
       if (mainImage) {
-        console.log('Uploading main image...');
         const imageFormData = new FormData();
         imageFormData.append('file', mainImage.file);
         
@@ -235,18 +230,15 @@ const CreateItemPage = () => {
         .then(imageUploadResponse => {
           if (!imageUploadResponse.ok) {
             return imageUploadResponse.text().then(errorText => {
-              console.error('Image upload failed:', errorText);
               throw new Error('Failed to upload image: ' + (imageUploadResponse.statusText || errorText));
             });
           }
           return imageUploadResponse.json();
         })
         .then(imageData => {
-          console.log('Image uploaded successfully:', imageData.url);
           return imageData.url;
         })
         .catch(imageError => {
-          console.error('Failed to upload image:', imageError);
           return null;
         });
       } else {
@@ -256,7 +248,6 @@ const CreateItemPage = () => {
       return imageUploadPromise
         .then(imgUrl => createItem(imgUrl))
         .then(newItem => {
-          console.log('Item created successfully:', newItem);
           return uploadMediaFiles(newItem.id).then(() => newItem);
         })
         .then(newItem => {
@@ -276,7 +267,6 @@ const CreateItemPage = () => {
           }, 2000);
         })
         .catch(error => {
-          console.error('Error submitting item:', error);
           setSubmitError(error.message || 'Failed to create item. Please try again later.');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         })

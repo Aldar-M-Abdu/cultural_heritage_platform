@@ -25,15 +25,16 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import ResetConfirmationPage from './pages/ResetConfirmationPage';
 import PressPage from './pages/PressPage';
 import TermsOfService from './pages/TermsOfService';
-import ExamplePage from './pages/ExamplePage';
 import CommunityPage from './pages/CommunityPage';
 import NewDiscussionPage from './pages/NewDiscussionPage';
 import DiscussionDetailPage from './pages/DiscussionDetailPage';
 import ContributorsPage from './pages/ContributorsPage';
 import ExhibitionsPage from './pages/ExhibitionsPage';
 import FAQPage from './pages/FAQPage';
+import SavedItemsPage from './pages/SavedItemsPage';
 import useAuthStore from './stores/authStore';
 import EventsPage from './pages/EventsPage';
+import EventDetailPage from './pages/EventDetailPage';
 import { API_BASE_URL } from './config';
 
 // Scroll to top component when route changes
@@ -61,17 +62,8 @@ function App() {
         }
         
         if (token) {
-          // Only log in development mode
-          if (import.meta.env.DEV) {
-            console.log("Initializing with token:", token.substring(0, 10) + '...');
-          }
-          
           try {
             await fetchUser();
-            // Only log in development mode
-            if (import.meta.env.DEV) {
-              console.log('User data fetched successfully during initialization');
-            }
           } catch (error) {
             console.error('Failed to fetch user data:', error);
             // Don't automatically log out if it might be a network error
@@ -151,8 +143,8 @@ function App() {
             <Route path="/reset-confirmation" element={<ResetConfirmationPage />} />
             <Route path="/press" element={<PressPage />} />
             <Route path="/events" element={<EventsPage/>} />
+            <Route path="/events/:id" element={<EventDetailPage />} />
             <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/examples" element={<ExamplePage />} />
             
             {/* New routes for the additional pages */}
             <Route path="/community" element={<CommunityPage />} />
@@ -166,6 +158,11 @@ function App() {
             <Route path="/profile" element={
               <ProtectedRoute fallback="/login">
                 <ProfilePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/user/favorites" element={
+              <ProtectedRoute fallback="/login">
+                <SavedItemsPage />
               </ProtectedRoute>
             } />
             <Route path="/items/new" element={

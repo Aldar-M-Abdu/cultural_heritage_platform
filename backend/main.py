@@ -139,39 +139,35 @@ frontend_urls = [
     "http://localhost:5174"   # Another possible dev URL
 ]
 
+# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_urls,  # Removed wildcard "*", using specific origins instead
+    allow_origins=frontend_urls,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["Content-Type", "Authorization"],
+    max_age=600  # Cache preflight requests for 10 minutes
 )
 
-# Add middleware to handle preflight requests
-@app.middleware("http")
-async def handle_options(request, call_next):
-    if request.method == "OPTIONS":
-        # Handle preflight request
-        from fastapi.responses import Response
-        origin = request.headers.get("Origin", "")
-        # Only allow listed origins when credentials are used
-        allowed_origin = origin if origin in frontend_urls else frontend_urls[0]
-        
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": allowed_origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                "Access-Control-Allow-Credentials": "true",
-            },
-        )
-    return await call_next(request)
+# Remove the custom OPTIONS middleware as it's redundant with the CORSMiddleware
+# The CORSMiddleware handles preflight requests properly
 
 @app.get("/")
 def root():
     return {"message": "Welcome to the Cultural Heritage Platform API"}
+
+# Add a redirect for the user-contributions endpoint
+@app.get("/api/v1/users/me/contributions", include_in_schema=False)
+async def redirect_user_contributions():
+    """Redirect to the contributions endpoint"""
+    return RedirectResponse(url="/api/v1/users/me/contributions", status_code=307)
+
+# Add a redirect for the users/me PUT endpoint
+@app.put("/api/v1/users/me", include_in_schema=False)
+async def redirect_update_current_user():
+    """Redirect to the users/me endpoint"""
+    return RedirectResponse(url="/api/v1/users/users/me", status_code=307)
 
 if __name__ == "__main__":
     import uvicorn
